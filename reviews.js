@@ -152,32 +152,18 @@ async function handleReviewSubmit(e) {
 
         // Upload image if exists
         if (imageFile) {
-            // Create storage bucket if it doesn't exist
-            const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-            if (bucketsError) throw bucketsError;
-
-            const reviewImagesBucket = buckets.find(bucket => bucket.name === 'review-images');
-            if (!reviewImagesBucket) {
-                const { error: createError } = await supabase.storage.createBucket('review-images', {
-                    public: true,
-                    fileSizeLimit: 5242880 // 5MB
-                });
-                if (createError) throw createError;
-            }
-
             const fileExt = imageFile.name.split('.').pop();
             const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
-            const filePath = fileName;
 
             const { error: uploadError } = await supabase.storage
                 .from('review-images')
-                .upload(filePath, imageFile);
+                .upload(fileName, imageFile);
 
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage
                 .from('review-images')
-                .getPublicUrl(filePath);
+                .getPublicUrl(fileName);
 
             imageUrl = publicUrl;
         }
@@ -222,6 +208,10 @@ async function loadReviews() {
             review_replies(
                 *,
                 user_profiles(username, avatar_url)
+            ),
+            review_reactions(
+                *,
+                user_profiles(username)
             )
         `)
         .order('created_at', { ascending: false });
@@ -231,67 +221,41 @@ async function loadReviews() {
         return;
     }
 
-    // Load reactions separately
-    const { data: reactions, error: reactionsError } = await supabase
-        .from('review_reactions')
-        .select('*');
-
-    if (reactionsError) {
-        console.error('Error loading reactions:', reactionsError);
-    }
-
-    // Count reactions per review
-    const reactionCounts = {};
-    if (reactions) {
-        reactions.forEach(reaction => {
-            if (!reactionCounts[reaction.review_id]) {
-                reactionCounts[reaction.review_id] = 0;
-            }
-            reactionCounts[reaction.review_id]++;
-        });
-    }
-
-    // Check user reactions
-    const userReactions = {};
-    if (currentUser && reactions) {
-        reactions.forEach(reaction => {
-            if (reaction.user_id === currentUser.id) {
-                userReactions[reaction.review_id] = true;
-            }
-        });
-    }
-
-    displayReviews(reviews, reactionCounts, userReactions);
+    displayReviews(reviews);
 }
 
-function displayReviews(reviews, reactionCounts = {}, userReactions = {}) {
+function displayReviews(reviews) {
     const container = document.getElementById('reviews-list');
     container.innerHTML = '';
 
-    if (reviews.length === 0) {
+    if (!reviews || reviews.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: #666;">No reviews yet. Be the first to share your experience!</p>';
         return;
     }
 
-    // Create gallery layout
+    // Enforce gallery layout
     container.style.display = 'grid';
     container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(350px, 1fr))';
     container.style.gap = '20px';
     container.style.marginTop = '30px';
 
     reviews.forEach(review => {
-        const reviewElement = createReviewElement(review, reactionCounts[review.id] || 0, userReactions[review.id] || false);
+        const reviewElement = createReviewElement(review);
         container.appendChild(reviewElement);
     });
 }
 
-function createReviewElement(review, likeCount, userLiked) {
+function createReviewElement(review) {
     const div = document.createElement('div');
     div.className = 'review-card';
 
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
     const avatarUrl = review.user_profiles.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${review.user_profiles.username?.charAt(0)?.toUpperCase() || 'U'}`;
+    
+    // Count likes
+    const likeCount = review.review_reactions?.length || 0;
+    const userLiked = currentUser && review.review_reactions?.some(reaction => reaction.user_id === currentUser.id);
 
     div.innerHTML = `
         <div class="review-header">
@@ -374,37 +338,29 @@ window.handleReaction = async function(reviewId) {
 
     try {
         // First, check if user already reacted
-        const { data: existingReaction, error: checkError } = await supabase
+        const { data: existingReaction } = await supabase
             .from('review_reactions')
             .select('*')
             .eq('review_id', reviewId)
             .eq('user_id', currentUser.id)
-            .single();
-
-        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
-            throw checkError;
-        }
+            .maybeSingle();
 
         if (existingReaction) {
             // Remove reaction if exists
-            const { error: deleteError } = await supabase
+            await supabase
                 .from('review_reactions')
                 .delete()
                 .eq('review_id', reviewId)
                 .eq('user_id', currentUser.id);
-
-            if (deleteError) throw deleteError;
         } else {
             // Add reaction if doesn't exist
-            const { error: insertError } = await supabase
+            await supabase
                 .from('review_reactions')
                 .insert([{
                     review_id: reviewId,
                     user_id: currentUser.id,
                     reaction_type: 'like'
                 }]);
-
-            if (insertError) throw insertError;
         }
 
         loadReviews();
@@ -431,14 +387,16 @@ window.showReplySection = function(reviewId) {
     const form = document.createElement('div');
     form.className = 'reply-form';
     form.innerHTML = `
-        <textarea placeholder="Write a reply..." rows="2" style="width: 100%; margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"></textarea>
-        <button type="button" onclick="submitReply('${reviewId}', this.previousElementSibling.value)" style="padding: 8px 16px; background: #1e3c72; color: white; border: none; border-radius: 5px; cursor: pointer;">Reply</button>
+        <textarea id="reply-text-${reviewId}" placeholder="Write a reply..." rows="2" style="width: 100%; margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"></textarea>
+        <button type="button" onclick="submitReply('${reviewId}')" style="padding: 8px 16px; background: #1e3c72; color: white; border: none; border-radius: 5px; cursor: pointer;">Post Reply</button>
     `;
     section.appendChild(form);
 };
 
-window.submitReply = async function(reviewId, content) {
-    if (!content || !content.trim()) {
+window.submitReply = async function(reviewId) {
+    const content = document.getElementById(`reply-text-${reviewId}`).value.trim();
+    
+    if (!content) {
         alert('Please enter reply content');
         return;
     }
@@ -449,7 +407,7 @@ window.submitReply = async function(reviewId, content) {
             .insert([{
                 review_id: reviewId,
                 user_id: currentUser.id,
-                content: content.trim()
+                content: content
             }]);
 
         if (error) throw error;
