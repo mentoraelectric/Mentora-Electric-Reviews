@@ -324,7 +324,7 @@ function createReviewElement(review, likeCount, userLiked) {
             ` : ''}
         </div>
         <div class="reply-section" id="reply-section-${review.id}">
-            ${review.review_replies.map(reply => {
+            ${review.review_replies && review.review_replies.length > 0 ? review.review_replies.map(reply => {
                 const replyAvatarUrl = reply.user_profiles.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${reply.user_profiles.username?.charAt(0)?.toUpperCase() || 'U'}`;
                 return `
                 <div class="reply">
@@ -337,7 +337,7 @@ function createReviewElement(review, likeCount, userLiked) {
                     </div>
                     <div class="review-content">${reply.content}</div>
                 </div>
-            `}).join('')}
+            `}).join('') : ''}
         </div>
     `;
 
@@ -373,20 +373,44 @@ window.handleReaction = async function(reviewId) {
     }
 
     try {
-        const { error } = await supabase
+        // First, check if user already reacted
+        const { data: existingReaction, error: checkError } = await supabase
             .from('review_reactions')
-            .upsert([{
-                review_id: reviewId,
-                user_id: currentUser.id,
-                reaction_type: 'like'
-            }], {
-                onConflict: 'review_id,user_id,reaction_type'
-            });
+            .select('*')
+            .eq('review_id', reviewId)
+            .eq('user_id', currentUser.id)
+            .single();
 
-        if (error) throw error;
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
+            throw checkError;
+        }
+
+        if (existingReaction) {
+            // Remove reaction if exists
+            const { error: deleteError } = await supabase
+                .from('review_reactions')
+                .delete()
+                .eq('review_id', reviewId)
+                .eq('user_id', currentUser.id);
+
+            if (deleteError) throw deleteError;
+        } else {
+            // Add reaction if doesn't exist
+            const { error: insertError } = await supabase
+                .from('review_reactions')
+                .insert([{
+                    review_id: reviewId,
+                    user_id: currentUser.id,
+                    reaction_type: 'like'
+                }]);
+
+            if (insertError) throw insertError;
+        }
+
         loadReviews();
     } catch (error) {
-        console.error('Error reacting to review:', error);
+        console.error('Error toggling reaction:', error);
+        alert('Error toggling reaction: ' + error.message);
     }
 };
 
@@ -408,13 +432,13 @@ window.showReplySection = function(reviewId) {
     form.className = 'reply-form';
     form.innerHTML = `
         <textarea placeholder="Write a reply..." rows="2" style="width: 100%; margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"></textarea>
-        <button onclick="submitReply('${reviewId}', this.previousElementSibling.value)" style="padding: 8px 16px; background: #1e3c72; color: white; border: none; border-radius: 5px; cursor: pointer;">Reply</button>
+        <button type="button" onclick="submitReply('${reviewId}', this.previousElementSibling.value)" style="padding: 8px 16px; background: #1e3c72; color: white; border: none; border-radius: 5px; cursor: pointer;">Reply</button>
     `;
     section.appendChild(form);
 };
 
 window.submitReply = async function(reviewId, content) {
-    if (!content.trim()) {
+    if (!content || !content.trim()) {
         alert('Please enter reply content');
         return;
     }
@@ -429,6 +453,12 @@ window.submitReply = async function(reviewId, content) {
             }]);
 
         if (error) throw error;
+        
+        // Clear the reply form and reload reviews
+        const section = document.getElementById(`reply-section-${reviewId}`);
+        const form = section.querySelector('.reply-form');
+        if (form) form.remove();
+        
         loadReviews();
     } catch (error) {
         console.error('Error submitting reply:', error);
