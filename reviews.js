@@ -1,4 +1,4 @@
-// reviews.js - FIXED REVIEW LOADING
+// reviews.js - FIXED COMMENT FUNCTIONALITY
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -410,7 +410,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// FIXED COMMENT FUNCTION
+// FIXED COMMENT FUNCTION - NOW WORKING PROPERLY
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -447,23 +447,72 @@ window.submitReply = async function(reviewId) {
     }
 
     try {
-        const { error } = await supabase
+        console.log('Submitting reply for review:', reviewId);
+        
+        // Get current user's profile to include username immediately
+        const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('username, avatar_url')
+            .eq('id', currentUser.id)
+            .single();
+
+        // Insert the reply
+        const { data: newReply, error } = await supabase
             .from('review_replies')
             .insert([{
                 review_id: reviewId,
                 user_id: currentUser.id,
                 content: content
-            }]);
+            }])
+            .select(`
+                *,
+                user_profiles (
+                    username,
+                    avatar_url
+                )
+            `)
+            .single();
 
-        if (error) throw error;
-        
+        if (error) {
+            console.error('Reply insert error:', error);
+            throw error;
+        }
+
+        console.log('Reply inserted successfully:', newReply);
         showSuccessMessage('Reply posted successfully!');
         
+        // Immediately add the new comment to the UI without reloading the entire page
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section?.querySelector('.reply-form');
         if (form) form.remove();
         
-        loadReviews();
+        // Create and append the new reply element immediately
+        if (newReply && section) {
+            const replyElement = document.createElement('div');
+            replyElement.className = 'reply';
+            
+            const replyUsername = newReply.user_profiles?.username || 'Unknown User';
+            const replyAvatarUrl = newReply.user_profiles?.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
+            
+            replyElement.innerHTML = `
+                <div class="review-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <img src="${replyAvatarUrl}" alt="${replyUsername}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                        <span class="review-user">${replyUsername}</span>
+                    </div>
+                    <span class="review-time">Just now</span>
+                </div>
+                <div class="review-content">${newReply.content || ''}</div>
+            `;
+            
+            section.appendChild(replyElement);
+        }
+        
+        // Also reload reviews to ensure everything is in sync
+        setTimeout(() => {
+            loadReviews();
+        }, 1000);
+        
     } catch (error) {
         console.error('Error submitting reply:', error);
         alert('Error submitting reply: ' + error.message);
