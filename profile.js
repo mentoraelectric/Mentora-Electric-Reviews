@@ -1,4 +1,4 @@
-// profile.js
+// profile.js - FIXED AVATAR UPLOAD
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -50,14 +50,12 @@ function setupEventListeners() {
 
 async function loadProfile() {
     try {
-        // First check if user profile exists
         let { data: profile, error } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', currentUser.id)
             .maybeSingle();
 
-        // If profile doesn't exist, create one
         if (!profile) {
             const username = currentUser.email.split('@')[0] || 'user_' + currentUser.id.substring(0, 8);
             const { data: newProfile, error: createError } = await supabase
@@ -93,13 +91,11 @@ async function handleAvatarUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Validate file size (2MB max)
     if (file.size > 2 * 1024 * 1024) {
         alert('File size must be less than 2MB');
         return;
     }
 
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
         alert('Please select a valid image file (JPEG, PNG, GIF, WEBP)');
@@ -110,19 +106,19 @@ async function handleAvatarUpload(event) {
         const fileExt = file.name.split('.').pop();
         const fileName = `${currentUser.id}/avatar.${fileExt}`;
 
-        // Upload avatar
+        // UPLOAD TO AVATARS BUCKET - FIXED
         const { error: uploadError } = await supabase.storage
             .from('avatars')
             .upload(fileName, file, { upsert: true });
 
         if (uploadError) throw uploadError;
 
-        // Get public URL
+        // GET PUBLIC URL
         const { data: { publicUrl } } = supabase.storage
             .from('avatars')
             .getPublicUrl(fileName);
 
-        // Update profile with avatar URL
+        // UPDATE PROFILE
         const { error: updateError } = await supabase
             .from('user_profiles')
             .update({ avatar_url: publicUrl })
@@ -130,7 +126,7 @@ async function handleAvatarUpload(event) {
 
         if (updateError) throw updateError;
 
-        // Update avatar display
+        // UPDATE DISPLAY
         document.getElementById('profile-avatar').src = publicUrl + '?t=' + new Date().getTime();
         alert('Avatar updated successfully!');
     } catch (error) {
@@ -153,7 +149,6 @@ async function handleProfileUpdate(e) {
     }
 
     try {
-        // Update username
         const { error: profileError } = await supabase
             .from('user_profiles')
             .update({ username })
@@ -161,7 +156,6 @@ async function handleProfileUpdate(e) {
 
         if (profileError) throw profileError;
 
-        // Update password if provided
         if (newPassword) {
             if (newPassword !== confirmPassword) {
                 alert('New passwords do not match');
@@ -179,7 +173,6 @@ async function handleProfileUpdate(e) {
 
             if (passwordError) throw passwordError;
             
-            // Clear password fields
             document.getElementById('current-password').value = '';
             document.getElementById('new-password').value = '';
             document.getElementById('confirm-password').value = '';
