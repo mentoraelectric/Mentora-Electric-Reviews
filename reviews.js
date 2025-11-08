@@ -1,4 +1,4 @@
-// reviews.js - FIXED COMMENT DISPLAY
+// reviews.js - FIXED REVIEW SUBMISSION
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -153,6 +153,7 @@ async function handleReviewSubmit(e) {
 
         let imageUrl = null;
 
+        // Upload image if exists
         if (imageFile) {
             const fileExt = imageFile.name.split('.').pop();
             const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
@@ -172,6 +173,7 @@ async function handleReviewSubmit(e) {
 
         let result;
         if (editingReviewId) {
+            // Update existing review
             result = await supabase
                 .from('reviews')
                 .update({
@@ -181,6 +183,7 @@ async function handleReviewSubmit(e) {
                 })
                 .eq('id', editingReviewId);
         } else {
+            // Create new review
             result = await supabase
                 .from('reviews')
                 .insert([{
@@ -195,7 +198,7 @@ async function handleReviewSubmit(e) {
         showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
         
         hideReviewModal();
-        loadReviews();
+        loadReviews(); // Reload reviews to show the new one
         
     } catch (error) {
         console.error('Error saving review:', error);
@@ -254,7 +257,6 @@ async function loadReviews() {
     try {
         console.log('Loading reviews...');
         
-        // SIMPLIFIED QUERY THAT ACTUALLY WORKS
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
@@ -314,6 +316,7 @@ function displayReviews(reviews) {
         return;
     }
 
+    // Apply grid layout
     container.style.display = 'grid';
     container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(350px, 1fr))';
     container.style.gap = '20px';
@@ -417,7 +420,6 @@ function getTimeAgo(dateString) {
     }
 }
 
-// FIXED COMMENT FUNCTION - SIMPLE AND WORKING
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -454,9 +456,6 @@ window.submitReply = async function(reviewId) {
     }
 
     try {
-        console.log('Submitting reply for review:', reviewId);
-        
-        // SIMPLE INSERT - NO COMPLEX QUERIES
         const { error } = await supabase
             .from('review_replies')
             .insert([{
@@ -465,13 +464,8 @@ window.submitReply = async function(reviewId) {
                 content: content
             }]);
 
-        if (error) {
-            console.error('Reply insert error:', error);
-            throw error;
-        }
+        if (error) throw error;
 
-        console.log('Reply inserted successfully');
-        
         // Get user profile for immediate display
         const { data: userProfile } = await supabase
             .from('user_profiles')
