@@ -1,4 +1,4 @@
-// reviews.js - FIXED COMMENT SUBMISSION
+// reviews.js - FIXED REVIEW POSTING
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -147,8 +147,14 @@ async function handleReviewSubmit(e) {
     }
 
     try {
+        // Show loading state
+        const submitBtn = document.getElementById('review-submit-btn');
+        submitBtn.textContent = 'Posting...';
+        submitBtn.disabled = true;
+
         let imageUrl = null;
 
+        // Upload image if exists
         if (imageFile) {
             const fileExt = imageFile.name.split('.').pop();
             const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
@@ -166,8 +172,9 @@ async function handleReviewSubmit(e) {
             imageUrl = publicUrl;
         }
 
+        let result;
         if (editingReviewId) {
-            const { error } = await supabase
+            result = await supabase
                 .from('reviews')
                 .update({
                     content,
@@ -175,51 +182,138 @@ async function handleReviewSubmit(e) {
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', editingReviewId);
-
-            if (error) throw error;
         } else {
-            const { error } = await supabase
+            result = await supabase
                 .from('reviews')
                 .insert([{
                     user_id: currentUser.id,
                     content,
                     image_url: imageUrl
                 }]);
-
-            if (error) throw error;
         }
 
+        if (result.error) throw result.error;
+
+        // Show success message
+        showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
+        
         hideReviewModal();
         loadReviews();
+        
     } catch (error) {
         console.error('Error saving review:', error);
         alert('Error saving review: ' + error.message);
+    } finally {
+        // Reset button state
+        const submitBtn = document.getElementById('review-submit-btn');
+        submitBtn.textContent = editingReviewId ? 'Update Review' : 'Post Review';
+        submitBtn.disabled = false;
     }
 }
 
-async function loadReviews() {
-    const { data: reviews, error } = await supabase
-        .from('reviews')
-        .select(`
-            *,
-            user_profiles(username, avatar_url),
-            review_replies(
-                *,
-                user_profiles(username, avatar_url)
-            ),
-            review_reactions(
-                *,
-                user_profiles(username)
-            )
-        `)
-        .order('created_at', { ascending: false });
+function showSuccessMessage(message) {
+    // Create success notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #4CAF50;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 5px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-weight: 500;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
 
-    if (error) {
-        console.error('Error loading reviews:', error);
-        return;
+// Add CSS for animations
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
     }
+    @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
 
-    displayReviews(reviews);
+async function loadReviews() {
+    try {
+        const { data: reviews, error } = await supabase
+            .from('reviews')
+            .select(`
+                *,
+                user_profiles(username, avatar_url),
+                review_replies(
+                    *,
+                    user_profiles(username, avatar_url)
+                ),
+                review_reactions(
+                    *,
+                    user_profiles(username)
+                )
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error loading reviews:', error);
+            showErrorMessage('Error loading reviews');
+            return;
+        }
+
+        displayReviews(reviews);
+    } catch (error) {
+        console.error('Error in loadReviews:', error);
+        showErrorMessage('Error loading reviews');
+    }
+}
+
+function showErrorMessage(message) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #f44336;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 5px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-weight: 500;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
 }
 
 function displayReviews(reviews) {
@@ -227,7 +321,13 @@ function displayReviews(reviews) {
     container.innerHTML = '';
 
     if (!reviews || reviews.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #666;">No reviews yet. Be the first to share your experience!</p>';
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #666;">
+                <h3>No reviews yet</h3>
+                <p>Be the first to share your experience with Mentora Electric!</p>
+                ${currentUser ? '<button class="cta-button" onclick="showReviewModal()" style="margin-top: 15px;">Write First Review</button>' : ''}
+            </div>
+        `;
         return;
     }
 
@@ -325,7 +425,7 @@ function getTimeAgo(dateString) {
     return `${months}mo ago`;
 }
 
-// FIXED COMMENT FUNCTION - SIMPLE AND WORKING
+// FIXED COMMENT FUNCTION
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -369,6 +469,9 @@ window.submitReply = async function(reviewId) {
 
         if (error) throw error;
         
+        // Show success message
+        showSuccessMessage('Reply posted successfully!');
+        
         // Remove the form and reload to show the new comment
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section.querySelector('.reply-form');
@@ -402,6 +505,7 @@ window.handleReaction = async function(reviewId) {
                 .delete()
                 .eq('review_id', reviewId)
                 .eq('user_id', currentUser.id);
+            showSuccessMessage('Reaction removed');
         } else {
             await supabase
                 .from('review_reactions')
@@ -410,6 +514,7 @@ window.handleReaction = async function(reviewId) {
                     user_id: currentUser.id,
                     reaction_type: 'like'
                 }]);
+            showSuccessMessage('Liked review!');
         }
 
         loadReviews();
@@ -433,6 +538,8 @@ window.deleteReview = async function(reviewId) {
             .eq('id', reviewId);
 
         if (error) throw error;
+        
+        showSuccessMessage('Review deleted successfully!');
         loadReviews();
     } catch (error) {
         console.error('Error deleting review:', error);
