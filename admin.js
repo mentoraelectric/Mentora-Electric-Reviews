@@ -1,3 +1,4 @@
+// admin.js
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -8,22 +9,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function checkAuthAndAdmin() {
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (!session) {
         window.location.href = 'auth.html?mode=login';
         return;
     }
 
     currentUser = session.user;
-    
+
     // Check if user is admin
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('is_admin')
         .eq('id', currentUser.id)
         .single();
 
-    if (!profile?.is_admin) {
+    if (error || !profile?.is_admin) {
         alert('Access denied. Admin privileges required.');
         window.location.href = 'reviews.html';
         return;
@@ -58,35 +59,39 @@ async function handleLogout() {
 }
 
 async function loadAdminData() {
-    // Get stats
-    const { count: reviewsCount } = await supabase
-        .from('reviews')
-        .select('*', { count: 'exact', head: true });
+    try {
+        // Get stats
+        const { count: reviewsCount } = await supabase
+            .from('reviews')
+            .select('*', { count: 'exact', head: true });
 
-    const { count: usersCount } = await supabase
-        .from('user_profiles')
-        .select('*', { count: 'exact', head: true });
+        const { count: usersCount } = await supabase
+            .from('user_profiles')
+            .select('*', { count: 'exact', head: true });
 
-    const { count: repliesCount } = await supabase
-        .from('review_replies')
-        .select('*', { count: 'exact', head: true });
+        const { count: repliesCount } = await supabase
+            .from('review_replies')
+            .select('*', { count: 'exact', head: true });
 
-    document.getElementById('admin-stats').innerHTML = `
-        <div class="features">
-            <div class="feature-card">
-                <h3>Total Reviews</h3>
-                <p>${reviewsCount}</p>
+        document.getElementById('admin-stats').innerHTML = `
+            <div class="features">
+                <div class="feature-card">
+                    <h3>Total Reviews</h3>
+                    <p>${reviewsCount || 0}</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Total Users</h3>
+                    <p>${usersCount || 0}</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Total Replies</h3>
+                    <p>${repliesCount || 0}</p>
+                </div>
             </div>
-            <div class="feature-card">
-                <h3>Total Users</h3>
-                <p>${usersCount}</p>
-            </div>
-            <div class="feature-card">
-                <h3>Total Replies</h3>
-                <p>${repliesCount}</p>
-            </div>
-        </div>
-    `;
+        `;
+    } catch (error) {
+        console.error('Error loading admin data:', error);
+    }
 }
 
 async function loadReviews() {
@@ -114,6 +119,11 @@ function displayReviews(reviews) {
     const container = document.getElementById('reviews-list');
     container.innerHTML = '<h2>All Reviews</h2>';
 
+    if (reviews.length === 0) {
+        container.innerHTML += '<p style="text-align: center; color: #666;">No reviews found.</p>';
+        return;
+    }
+
     reviews.forEach(review => {
         const reviewElement = createReviewElement(review);
         container.appendChild(reviewElement);
@@ -123,7 +133,7 @@ function displayReviews(reviews) {
 function createReviewElement(review) {
     const div = document.createElement('div');
     div.className = 'review-card';
-    
+
     const timeAgo = getTimeAgo(review.created_at);
 
     div.innerHTML = `
@@ -146,11 +156,9 @@ function createReviewElement(review) {
                     <div class="review-header">
                         <span class="review-user">${reply.user_profiles.username} ${reply.user_profiles.username === 'admin' ? '(Admin)' : ''}</span>
                         <span class="review-time">${getTimeAgo(reply.created_at)}</span>
-                        ${reply.user_profiles.username !== 'admin' ? `
-                            <button onclick="deleteReplyAsAdmin('${reply.id}')" style="color: red; border: none; background: none; cursor: pointer;">
-                                🗑️
-                            </button>
-                        ` : ''}
+                        <button onclick="deleteReplyAsAdmin('${reply.id}')" style="color: red; border: none; background: none; cursor: pointer;">
+                            🗑️
+                        </button>
                     </div>
                     <div class="review-content">${reply.content}</div>
                 </div>
@@ -165,7 +173,7 @@ function getTimeAgo(dateString) {
     const date = new Date(dateString);
     const now = new Date();
     const diff = now - date;
-    
+
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
@@ -181,37 +189,53 @@ window.adminReply = async function(reviewId) {
     const content = prompt('Enter your admin reply:');
     if (!content) return;
 
-    await supabase
-        .from('review_replies')
-        .insert([
-            { 
-                review_id: reviewId, 
+    try {
+        const { error } = await supabase
+            .from('review_replies')
+            .insert([{
+                review_id: reviewId,
                 user_id: currentUser.id,
-                content 
-            }
-        ]);
+                content
+            }]);
 
-    loadReviews();
+        if (error) throw error;
+        loadReviews();
+    } catch (error) {
+        console.error('Error posting admin reply:', error);
+        alert('Error posting reply: ' + error.message);
+    }
 };
 
 window.deleteReviewAsAdmin = async function(reviewId) {
     if (!confirm('Are you sure you want to delete this review as admin?')) return;
 
-    await supabase
-        .from('reviews')
-        .delete()
-        .eq('id', reviewId);
+    try {
+        const { error } = await supabase
+            .from('reviews')
+            .delete()
+            .eq('id', reviewId);
 
-    loadReviews();
+        if (error) throw error;
+        loadReviews();
+    } catch (error) {
+        console.error('Error deleting review:', error);
+        alert('Error deleting review: ' + error.message);
+    }
 };
 
 window.deleteReplyAsAdmin = async function(replyId) {
     if (!confirm('Are you sure you want to delete this reply?')) return;
 
-    await supabase
-        .from('review_replies')
-        .delete()
-        .eq('id', replyId);
+    try {
+        const { error } = await supabase
+            .from('review_replies')
+            .delete()
+            .eq('id', replyId);
 
-    loadReviews();
+        if (error) throw error;
+        loadReviews();
+    } catch (error) {
+        console.error('Error deleting reply:', error);
+        alert('Error deleting reply: ' + error.message);
+    }
 };
