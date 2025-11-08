@@ -35,7 +35,7 @@ async function updateNavForAuth() {
         <div class="user-menu">
             <span class="nav-link">${profile?.username || 'User'}</span>
             <div class="user-dropdown" id="user-dropdown">
-                <a href="#" id="profile-link">Profile</a>
+                <a href="profile.html" id="profile-link">Profile</a>
                 ${profile?.is_admin ? '<a href="admin.html">Admin Panel</a>' : ''}
                 <a href="#" id="logout-link">Logout</a>
             </div>
@@ -47,10 +47,6 @@ async function updateNavForAuth() {
 
 function setupAuthListeners() {
     document.getElementById('logout-link')?.addEventListener('click', handleLogout);
-    document.getElementById('profile-link')?.addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'profile.html';
-    });
     document.querySelector('.user-menu')?.addEventListener('click', function(e) {
         document.getElementById('user-dropdown').classList.toggle('show');
     });
@@ -156,9 +152,22 @@ async function handleReviewSubmit(e) {
 
         // Upload image if exists
         if (imageFile) {
+            // Create storage bucket if it doesn't exist
+            const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+            if (bucketsError) throw bucketsError;
+
+            const reviewImagesBucket = buckets.find(bucket => bucket.name === 'review-images');
+            if (!reviewImagesBucket) {
+                const { error: createError } = await supabase.storage.createBucket('review-images', {
+                    public: true,
+                    fileSizeLimit: 5242880 // 5MB
+                });
+                if (createError) throw createError;
+            }
+
             const fileExt = imageFile.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `review-images/${fileName}`;
+            const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
+            const filePath = fileName;
 
             const { error: uploadError } = await supabase.storage
                 .from('review-images')
@@ -209,12 +218,11 @@ async function loadReviews() {
         .from('reviews')
         .select(`
             *,
-            user_profiles(username),
+            user_profiles(username, avatar_url),
             review_replies(
                 *,
-                user_profiles(username)
-            ),
-            review_reactions(count)
+                user_profiles(username, avatar_url)
+            )
         `)
         .order('created_at', { ascending: false });
 
@@ -223,10 +231,40 @@ async function loadReviews() {
         return;
     }
 
-    displayReviews(reviews);
+    // Load reactions separately
+    const { data: reactions, error: reactionsError } = await supabase
+        .from('review_reactions')
+        .select('*');
+
+    if (reactionsError) {
+        console.error('Error loading reactions:', reactionsError);
+    }
+
+    // Count reactions per review
+    const reactionCounts = {};
+    if (reactions) {
+        reactions.forEach(reaction => {
+            if (!reactionCounts[reaction.review_id]) {
+                reactionCounts[reaction.review_id] = 0;
+            }
+            reactionCounts[reaction.review_id]++;
+        });
+    }
+
+    // Check user reactions
+    const userReactions = {};
+    if (currentUser && reactions) {
+        reactions.forEach(reaction => {
+            if (reaction.user_id === currentUser.id) {
+                userReactions[reaction.review_id] = true;
+            }
+        });
+    }
+
+    displayReviews(reviews, reactionCounts, userReactions);
 }
 
-function displayReviews(reviews) {
+function displayReviews(reviews, reactionCounts = {}, userReactions = {}) {
     const container = document.getElementById('reviews-list');
     container.innerHTML = '';
 
@@ -235,30 +273,43 @@ function displayReviews(reviews) {
         return;
     }
 
+    // Create gallery layout
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(350px, 1fr))';
+    container.style.gap = '20px';
+    container.style.marginTop = '30px';
+
     reviews.forEach(review => {
-        const reviewElement = createReviewElement(review);
+        const reviewElement = createReviewElement(review, reactionCounts[review.id] || 0, userReactions[review.id] || false);
         container.appendChild(reviewElement);
     });
 }
 
-function createReviewElement(review) {
+function createReviewElement(review, likeCount, userLiked) {
     const div = document.createElement('div');
     div.className = 'review-card';
 
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
-    const likeCount = review.review_reactions?.[0]?.count || 0;
+    const avatarUrl = review.user_profiles.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${review.user_profiles.username?.charAt(0)?.toUpperCase() || 'U'}`;
 
     div.innerHTML = `
         <div class="review-header">
-            <span class="review-user">${review.user_profiles.username}</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <img src="${avatarUrl}" alt="${review.user_profiles.username}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                <span class="review-user">${review.user_profiles.username}</span>
+            </div>
             <span class="review-time">${timeAgo}</span>
         </div>
         <div class="review-content">${review.content}</div>
-        ${review.image_url ? `<img src="${review.image_url}" alt="Review image" class="review-image" onclick="window.open('${review.image_url}', '_blank')" style="cursor: pointer;">` : ''}
+        ${review.image_url ? `
+            <div class="review-image-container">
+                <img src="${review.image_url}" alt="Review image" class="review-image" onclick="window.open('${review.image_url}', '_blank')">
+            </div>
+        ` : ''}
         <div class="review-actions">
-            <button class="reaction-btn" onclick="handleReaction('${review.id}')">
-                👍 <span>${likeCount}</span>
+            <button class="reaction-btn ${userLiked ? 'active' : ''}" onclick="handleReaction('${review.id}')">
+                ${userLiked ? '❤️' : '🤍'} <span>${likeCount}</span>
             </button>
             <button class="reaction-btn" onclick="showReplySection('${review.id}')">
                 💬 Reply
@@ -273,15 +324,20 @@ function createReviewElement(review) {
             ` : ''}
         </div>
         <div class="reply-section" id="reply-section-${review.id}">
-            ${review.review_replies.map(reply => `
+            ${review.review_replies.map(reply => {
+                const replyAvatarUrl = reply.user_profiles.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${reply.user_profiles.username?.charAt(0)?.toUpperCase() || 'U'}`;
+                return `
                 <div class="reply">
                     <div class="review-header">
-                        <span class="review-user">${reply.user_profiles.username}</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <img src="${replyAvatarUrl}" alt="${reply.user_profiles.username}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                            <span class="review-user">${reply.user_profiles.username}</span>
+                        </div>
                         <span class="review-time">${getTimeAgo(reply.created_at)}</span>
                     </div>
                     <div class="review-content">${reply.content}</div>
                 </div>
-            `).join('')}
+            `}).join('')}
         </div>
     `;
 
@@ -300,7 +356,13 @@ function getTimeAgo(dateString) {
     if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
+    if (days < 7) return `${days}d ago`;
+    
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return `${weeks}w ago`;
+    
+    const months = Math.floor(days / 30);
+    return `${months}mo ago`;
 }
 
 // Global functions for event handlers
