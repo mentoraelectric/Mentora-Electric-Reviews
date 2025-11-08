@@ -1,4 +1,4 @@
-// reviews.js - FIXED REVIEW DISPLAY
+// reviews.js - FIXED WITH ALL FUNCTIONALITY
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -199,7 +199,6 @@ async function handleReviewSubmit(e) {
         showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
         
         hideReviewModal();
-        // Force reload reviews with a small delay to ensure database is updated
         setTimeout(() => {
             loadReviews();
         }, 500);
@@ -261,12 +260,20 @@ async function loadReviews() {
     try {
         console.log('Loading reviews from database...');
         
-        // SIMPLE QUERY - just get reviews and user profiles first
+        // FIXED QUERY - Proper relationship syntax
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
                 *,
-                user_profiles:user_id (username, avatar_url)
+                user_profiles!inner (username, avatar_url),
+                review_replies (
+                    *,
+                    user_profiles!inner (username, avatar_url)
+                ),
+                review_reactions (
+                    *,
+                    user_profiles!inner (username)
+                )
             `)
             .order('created_at', { ascending: false });
 
@@ -285,7 +292,6 @@ async function loadReviews() {
         
     } catch (error) {
         console.error('Error loading reviews:', error);
-        // Show empty state but don't throw error to user
         displayReviews([]);
     }
 }
@@ -313,7 +319,6 @@ function displayReviews(reviews) {
         return;
     }
 
-    // Reset styles first
     container.style.display = 'grid';
     container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(350px, 1fr))';
     container.style.gap = '20px';
@@ -337,7 +342,7 @@ function createReviewElement(review) {
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
     
-    // SAFE data access - handle nested user_profiles object
+    // SAFE data access
     let username = 'Unknown User';
     let avatarUrl = 'https://via.placeholder.com/40/1e3c72/ffffff?text=U';
     
@@ -345,6 +350,10 @@ function createReviewElement(review) {
         username = review.user_profiles.username || 'Unknown User';
         avatarUrl = review.user_profiles.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${username.charAt(0).toUpperCase()}`;
     }
+
+    // Count likes
+    const likeCount = review.review_reactions?.length || 0;
+    const userLiked = currentUser && review.review_reactions?.some(reaction => reaction.user_id === currentUser.id);
 
     div.innerHTML = `
         <div class="review-header">
@@ -361,8 +370,8 @@ function createReviewElement(review) {
             </div>
         ` : ''}
         <div class="review-actions">
-            <button class="reaction-btn" onclick="handleReaction('${review.id}')">
-                🤍 <span>0</span>
+            <button class="reaction-btn ${userLiked ? 'active' : ''}" onclick="handleReaction('${review.id}')">
+                ${userLiked ? '❤️' : '🤍'} <span>${likeCount}</span>
             </button>
             <button class="reaction-btn" onclick="showReplySection('${review.id}')">
                 💬 Reply
@@ -377,7 +386,21 @@ function createReviewElement(review) {
             ` : ''}
         </div>
         <div class="reply-section" id="reply-section-${review.id}">
-            <!-- Replies will be loaded separately if needed -->
+            ${review.review_replies && review.review_replies.length > 0 ? review.review_replies.map(reply => {
+                const replyUsername = reply.user_profiles?.username || 'Unknown User';
+                const replyAvatarUrl = reply.user_profiles?.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
+                return `
+                <div class="reply">
+                    <div class="review-header">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <img src="${replyAvatarUrl}" alt="${replyUsername}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                            <span class="review-user">${replyUsername}</span>
+                        </div>
+                        <span class="review-time">${getTimeAgo(reply.created_at)}</span>
+                    </div>
+                    <div class="review-content">${reply.content || ''}</div>
+                </div>
+            `}).join('') : ''}
         </div>
     `;
 
@@ -409,7 +432,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// Comment functions
+// FIXED COMMENT FUNCTIONS
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
