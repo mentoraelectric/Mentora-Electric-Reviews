@@ -1,11 +1,9 @@
-import {
-    supabase
-} from './supabase-config.js';
+import { supabase } from './supabase-config.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode');
-
+    
     if (mode === 'signup') {
         showSignup();
     }
@@ -15,15 +13,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function setupAuthListeners() {
     // Form toggles
-    document.getElementById('show-signup') ? .addEventListener('click', showSignup);
-    document.getElementById('show-login') ? .addEventListener('click', showLogin);
-    document.getElementById('show-forgot') ? .addEventListener('click', showForgot);
-    document.getElementById('show-login-from-forgot') ? .addEventListener('click', showLogin);
+    document.getElementById('show-signup')?.addEventListener('click', showSignup);
+    document.getElementById('show-login')?.addEventListener('click', showLogin);
+    document.getElementById('show-forgot')?.addEventListener('click', showForgot);
+    document.getElementById('show-login-from-forgot')?.addEventListener('click', showLogin);
 
     // Form submissions
-    document.getElementById('loginForm') ? .addEventListener('submit', handleLogin);
-    document.getElementById('signupForm') ? .addEventListener('submit', handleSignup);
-    document.getElementById('forgotForm') ? .addEventListener('submit', handleForgotPassword);
+    document.getElementById('loginForm')?.addEventListener('submit', handleLogin);
+    document.getElementById('signupForm')?.addEventListener('submit', handleSignup);
+    document.getElementById('forgotForm')?.addEventListener('submit', handleForgotPassword);
 }
 
 function showLogin() {
@@ -49,9 +47,7 @@ async function handleLogin(e) {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
 
-    const {
-        error
-    } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
         email,
         password
     });
@@ -69,10 +65,7 @@ async function handleSignup(e) {
     const password = document.getElementById('signup-password').value;
     const username = document.getElementById('signup-username').value;
 
-    const {
-        data,
-        error
-    } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -88,10 +81,12 @@ async function handleSignup(e) {
         // Create user profile
         await supabase
             .from('user_profiles')
-            .insert([{
-                id: data.user.id,
-                username: username
-            }]);
+            .insert([
+                { 
+                    id: data.user.id, 
+                    username: username 
+                }
+            ]);
 
         alert('Signup successful! Please check your email for verification.');
         showLogin();
@@ -102,9 +97,7 @@ async function handleForgotPassword(e) {
     e.preventDefault();
     const email = document.getElementById('reset-email').value;
 
-    const {
-        error
-    } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
 
     if (error) {
         alert('Error: ' + error.message);
