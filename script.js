@@ -1,3 +1,4 @@
+// script.js
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -29,7 +30,6 @@ async function updateNavForAuth() {
         <div class="user-menu">
             <span class="nav-link">Welcome, ${profile?.username || 'User'}</span>
             <div class="user-dropdown" id="user-dropdown">
-                <a href="#" id="profile-link">Profile</a>
                 ${profile?.is_admin ? '<a href="admin.html">Admin Panel</a>' : ''}
                 <a href="#" id="logout-link">Logout</a>
             </div>
@@ -38,6 +38,11 @@ async function updateNavForAuth() {
 
     document.querySelector('.user-menu').addEventListener('click', function(e) {
         document.getElementById('user-dropdown').classList.toggle('show');
+    });
+
+    document.getElementById('logout-link').addEventListener('click', async function() {
+        await supabase.auth.signOut();
+        window.location.reload();
     });
 }
 
