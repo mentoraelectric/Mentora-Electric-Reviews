@@ -1,3 +1,4 @@
+// reviews.js
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -34,7 +35,6 @@ async function updateNavForAuth() {
         <div class="user-menu">
             <span class="nav-link">${profile?.username || 'User'}</span>
             <div class="user-dropdown" id="user-dropdown">
-                <a href="#" id="profile-link">Profile</a>
                 ${profile?.is_admin ? '<a href="admin.html">Admin Panel</a>' : ''}
                 <a href="#" id="logout-link">Logout</a>
             </div>
@@ -60,7 +60,7 @@ function setupEventListeners() {
     document.getElementById('add-review-btn')?.addEventListener('click', showReviewModal);
     document.getElementById('close-review-modal')?.addEventListener('click', hideReviewModal);
     document.getElementById('review-form')?.addEventListener('submit', handleReviewSubmit);
-    
+
     // Close modal when clicking outside
     document.getElementById('review-modal')?.addEventListener('click', function(e) {
         if (e.target === this) hideReviewModal();
@@ -100,29 +100,41 @@ function hideReviewModal() {
 
 async function handleReviewSubmit(e) {
     e.preventDefault();
-    const content = document.getElementById('review-content').value;
+    const content = document.getElementById('review-content').value.trim();
 
-    if (editingReviewId) {
-        await supabase
-            .from('reviews')
-            .update({ 
-                content,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', editingReviewId);
-    } else {
-        await supabase
-            .from('reviews')
-            .insert([
-                { 
-                    user_id: currentUser.id, 
-                    content 
-                }
-            ]);
+    if (!content) {
+        alert('Please enter review content');
+        return;
     }
 
-    hideReviewModal();
-    loadReviews();
+    try {
+        if (editingReviewId) {
+            const { error } = await supabase
+                .from('reviews')
+                .update({
+                    content,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', editingReviewId);
+
+            if (error) throw error;
+        } else {
+            const { error } = await supabase
+                .from('reviews')
+                .insert([{
+                    user_id: currentUser.id,
+                    content
+                }]);
+
+            if (error) throw error;
+        }
+
+        hideReviewModal();
+        loadReviews();
+    } catch (error) {
+        console.error('Error saving review:', error);
+        alert('Error saving review: ' + error.message);
+    }
 }
 
 async function loadReviews() {
@@ -151,6 +163,11 @@ function displayReviews(reviews) {
     const container = document.getElementById('reviews-list');
     container.innerHTML = '';
 
+    if (reviews.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #666;">No reviews yet. Be the first to share your experience!</p>';
+        return;
+    }
+
     reviews.forEach(review => {
         const reviewElement = createReviewElement(review);
         container.appendChild(reviewElement);
@@ -160,9 +177,10 @@ function displayReviews(reviews) {
 function createReviewElement(review) {
     const div = document.createElement('div');
     div.className = 'review-card';
-    
+
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
+    const likeCount = review.review_reactions?.[0]?.count || 0;
 
     div.innerHTML = `
         <div class="review-header">
@@ -172,7 +190,7 @@ function createReviewElement(review) {
         <div class="review-content">${review.content}</div>
         <div class="review-actions">
             <button class="reaction-btn" onclick="handleReaction('${review.id}')">
-                👍 <span>${review.review_reactions[0]?.count || 0}</span>
+                👍 <span>${likeCount}</span>
             </button>
             <button class="reaction-btn" onclick="showReplySection('${review.id}')">
                 💬 Reply
@@ -206,7 +224,7 @@ function getTimeAgo(dateString) {
     const date = new Date(dateString);
     const now = new Date();
     const diff = now - date;
-    
+
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
@@ -224,19 +242,22 @@ window.handleReaction = async function(reviewId) {
         return;
     }
 
-    await supabase
-        .from('review_reactions')
-        .upsert([
-            { 
-                review_id: reviewId, 
+    try {
+        const { error } = await supabase
+            .from('review_reactions')
+            .upsert([{
+                review_id: reviewId,
                 user_id: currentUser.id,
                 reaction_type: 'like'
-            }
-        ], {
-            onConflict: 'review_id,user_id,reaction_type'
-        });
+            }], {
+                onConflict: 'review_id,user_id,reaction_type'
+            });
 
-    loadReviews();
+        if (error) throw error;
+        loadReviews();
+    } catch (error) {
+        console.error('Error reacting to review:', error);
+    }
 };
 
 window.showReplySection = function(reviewId) {
@@ -247,7 +268,7 @@ window.showReplySection = function(reviewId) {
 
     const section = document.getElementById(`reply-section-${reviewId}`);
     const existingForm = section.querySelector('.reply-form');
-    
+
     if (existingForm) {
         existingForm.remove();
         return;
@@ -256,26 +277,33 @@ window.showReplySection = function(reviewId) {
     const form = document.createElement('div');
     form.className = 'reply-form';
     form.innerHTML = `
-        <textarea placeholder="Write a reply..." rows="2" style="width: 100%; margin-bottom: 10px;"></textarea>
-        <button onclick="submitReply('${reviewId}', this.previousElementSibling.value)">Reply</button>
+        <textarea placeholder="Write a reply..." rows="2" style="width: 100%; margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"></textarea>
+        <button onclick="submitReply('${reviewId}', this.previousElementSibling.value)" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Reply</button>
     `;
     section.appendChild(form);
 };
 
 window.submitReply = async function(reviewId, content) {
-    if (!content.trim()) return;
+    if (!content.trim()) {
+        alert('Please enter reply content');
+        return;
+    }
 
-    await supabase
-        .from('review_replies')
-        .insert([
-            { 
-                review_id: reviewId, 
+    try {
+        const { error } = await supabase
+            .from('review_replies')
+            .insert([{
+                review_id: reviewId,
                 user_id: currentUser.id,
-                content 
-            }
-        ]);
+                content: content.trim()
+            }]);
 
-    loadReviews();
+        if (error) throw error;
+        loadReviews();
+    } catch (error) {
+        console.error('Error submitting reply:', error);
+        alert('Error submitting reply: ' + error.message);
+    }
 };
 
 window.editReview = function(review) {
@@ -285,10 +313,16 @@ window.editReview = function(review) {
 window.deleteReview = async function(reviewId) {
     if (!confirm('Are you sure you want to delete this review?')) return;
 
-    await supabase
-        .from('reviews')
-        .delete()
-        .eq('id', reviewId);
+    try {
+        const { error } = await supabase
+            .from('reviews')
+            .delete()
+            .eq('id', reviewId);
 
-    loadReviews();
+        if (error) throw error;
+        loadReviews();
+    } catch (error) {
+        console.error('Error deleting review:', error);
+        alert('Error deleting review: ' + error.message);
+    }
 };
