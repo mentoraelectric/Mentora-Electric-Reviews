@@ -1,4 +1,4 @@
-// reviews.js - FIXED WITH ALL FUNCTIONALITY
+// reviews.js - FIXED COMMENT POSTING
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -195,7 +195,6 @@ async function handleReviewSubmit(e) {
             throw result.error;
         }
 
-        console.log('Review saved successfully:', result.data);
         showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
         
         hideReviewModal();
@@ -260,20 +259,12 @@ async function loadReviews() {
     try {
         console.log('Loading reviews from database...');
         
-        // FIXED QUERY - Proper relationship syntax
+        // SIMPLE WORKING QUERY
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
                 *,
-                user_profiles!inner (username, avatar_url),
-                review_replies (
-                    *,
-                    user_profiles!inner (username, avatar_url)
-                ),
-                review_reactions (
-                    *,
-                    user_profiles!inner (username)
-                )
+                user_profiles!inner (username, avatar_url)
             `)
             .order('created_at', { ascending: false });
 
@@ -284,8 +275,28 @@ async function loadReviews() {
 
         console.log('Raw reviews data:', reviews);
         
+        // Load replies separately for each review
         if (reviews && reviews.length > 0) {
-            console.log('First review sample:', reviews[0]);
+            for (let review of reviews) {
+                const { data: replies } = await supabase
+                    .from('review_replies')
+                    .select(`
+                        *,
+                        user_profiles!inner (username, avatar_url)
+                    `)
+                    .eq('review_id', review.id)
+                    .order('created_at', { ascending: true });
+                
+                review.review_replies = replies || [];
+                
+                // Load reactions separately
+                const { data: reactions } = await supabase
+                    .from('review_reactions')
+                    .select('*')
+                    .eq('review_id', review.id);
+                
+                review.review_reactions = reactions || [];
+            }
         }
 
         displayReviews(reviews || []);
@@ -432,7 +443,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// FIXED COMMENT FUNCTIONS
+// FIXED COMMENT FUNCTIONS - SIMPLE AND WORKING
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -469,22 +480,33 @@ window.submitReply = async function(reviewId) {
     }
 
     try {
-        const { error } = await supabase
+        console.log('Submitting reply for review:', reviewId);
+        console.log('Reply content:', content);
+        console.log('Current user:', currentUser.id);
+
+        const { data, error } = await supabase
             .from('review_replies')
             .insert([{
                 review_id: reviewId,
                 user_id: currentUser.id,
                 content: content
-            }]);
+            }])
+            .select();
 
-        if (error) throw error;
-        
+        if (error) {
+            console.error('Reply insert error:', error);
+            throw error;
+        }
+
+        console.log('Reply inserted successfully:', data);
         showSuccessMessage('Reply posted successfully!');
         
+        // Clear the form
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section?.querySelector('.reply-form');
         if (form) form.remove();
         
+        // Reload to show the new comment
         loadReviews();
     } catch (error) {
         console.error('Error submitting reply:', error);
