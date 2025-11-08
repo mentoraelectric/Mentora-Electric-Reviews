@@ -561,3 +561,56 @@ body {
         gap: 30px;
     }
 }
+/* Add to your existing style.css */
+
+/* Enforce gallery layout for reviews */
+#reviews-list {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)) !important;
+    gap: 20px !important;
+    margin-top: 30px !important;
+}
+
+.review-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 0 !important; /* Remove margin-bottom since gap handles spacing */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    break-inside: avoid;
+}
+
+/* Ensure images in gallery are responsive */
+.review-image {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.3s;
+    object-fit: cover;
+    width: 100%;
+}
+
+.review-image:hover {
+    transform: scale(1.02);
+}
+
+/* Make sure the container uses grid */
+.reviews-container {
+    max-width: 1200px;
+    margin: 100px auto 40px;
+    padding: 0 20px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    #reviews-list {
+        grid-template-columns: 1fr !important;
+        gap: 15px !important;
+    }
+    
+    .reviews-container {
+        margin-top: 80px;
+        padding: 0 15px;
+    }
+}
