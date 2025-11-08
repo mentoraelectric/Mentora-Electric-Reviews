@@ -1,6 +1,4 @@
-import {
-    supabase
-} from './supabase-config.js';
+import { supabase } from './supabase-config.js';
 
 let currentUser = null;
 
@@ -10,11 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function checkAuthState() {
-    const {
-        data: {
-            session
-        }
-    } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     if (session) {
         currentUser = session.user;
         await updateNavForAuth();
@@ -25,9 +19,7 @@ async function checkAuthState() {
 
 async function updateNavForAuth() {
     const navAuth = document.getElementById('nav-auth');
-    const {
-        data: profile
-    } = await supabase
+    const { data: profile } = await supabase
         .from('user_profiles')
         .select('username, is_admin')
         .eq('id', currentUser.id)
@@ -55,11 +47,11 @@ function updateNavForGuest() {
 }
 
 function setupEventListeners() {
-    document.getElementById('view-reviews-btn') ? .addEventListener('click', function() {
+    document.getElementById('view-reviews-btn')?.addEventListener('click', function() {
         window.location.href = 'reviews.html';
     });
 
-    document.getElementById('reviews-link') ? .addEventListener('click', function(e) {
+    document.getElementById('reviews-link')?.addEventListener('click', function(e) {
         e.preventDefault();
         window.location.href = 'reviews.html';
     });
