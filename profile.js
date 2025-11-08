@@ -73,8 +73,6 @@ async function loadProfile() {
             profile = newProfile;
         }
 
-        if (error) throw error;
-
         document.getElementById('username').value = profile.username || '';
         document.getElementById('email').value = currentUser.email;
         
@@ -109,34 +107,20 @@ async function handleAvatarUpload(event) {
     }
 
     try {
-        // Create storage bucket if it doesn't exist
-        const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-        if (bucketsError) throw bucketsError;
-
-        const avatarsBucket = buckets.find(bucket => bucket.name === 'avatars');
-        if (!avatarsBucket) {
-            const { error: createError } = await supabase.storage.createBucket('avatars', {
-                public: true,
-                fileSizeLimit: 2097152 // 2MB
-            });
-            if (createError) throw createError;
-        }
-
         const fileExt = file.name.split('.').pop();
         const fileName = `${currentUser.id}/avatar.${fileExt}`;
-        const filePath = fileName;
 
         // Upload avatar
         const { error: uploadError } = await supabase.storage
             .from('avatars')
-            .upload(filePath, file, { upsert: true });
+            .upload(fileName, file, { upsert: true });
 
         if (uploadError) throw uploadError;
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
             .from('avatars')
-            .getPublicUrl(filePath);
+            .getPublicUrl(fileName);
 
         // Update profile with avatar URL
         const { error: updateError } = await supabase
