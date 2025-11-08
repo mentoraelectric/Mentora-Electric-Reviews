@@ -1,6 +1,4 @@
-import {
-    supabase
-} from './supabase-config.js';
+import { supabase } from './supabase-config.js';
 
 let currentUser = null;
 let editingReviewId = null;
@@ -12,11 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function checkAuthState() {
-    const {
-        data: {
-            session
-        }
-    } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     if (session) {
         currentUser = session.user;
         updateUIForAuth();
@@ -30,9 +24,7 @@ function updateUIForAuth() {
 
 async function updateNavForAuth() {
     const navAuth = document.getElementById('nav-auth');
-    const {
-        data: profile
-    } = await supabase
+    const { data: profile } = await supabase
         .from('user_profiles')
         .select('username, is_admin')
         .eq('id', currentUser.id)
@@ -53,8 +45,8 @@ async function updateNavForAuth() {
 }
 
 function setupAuthListeners() {
-    document.getElementById('logout-link') ? .addEventListener('click', handleLogout);
-    document.querySelector('.user-menu') ? .addEventListener('click', function(e) {
+    document.getElementById('logout-link')?.addEventListener('click', handleLogout);
+    document.querySelector('.user-menu')?.addEventListener('click', function(e) {
         document.getElementById('user-dropdown').classList.toggle('show');
     });
 }
@@ -65,12 +57,12 @@ async function handleLogout() {
 }
 
 function setupEventListeners() {
-    document.getElementById('add-review-btn') ? .addEventListener('click', showReviewModal);
-    document.getElementById('close-review-modal') ? .addEventListener('click', hideReviewModal);
-    document.getElementById('review-form') ? .addEventListener('submit', handleReviewSubmit);
-
+    document.getElementById('add-review-btn')?.addEventListener('click', showReviewModal);
+    document.getElementById('close-review-modal')?.addEventListener('click', hideReviewModal);
+    document.getElementById('review-form')?.addEventListener('submit', handleReviewSubmit);
+    
     // Close modal when clicking outside
-    document.getElementById('review-modal') ? .addEventListener('click', function(e) {
+    document.getElementById('review-modal')?.addEventListener('click', function(e) {
         if (e.target === this) hideReviewModal();
     });
 }
@@ -113,7 +105,7 @@ async function handleReviewSubmit(e) {
     if (editingReviewId) {
         await supabase
             .from('reviews')
-            .update({
+            .update({ 
                 content,
                 updated_at: new Date().toISOString()
             })
@@ -121,10 +113,12 @@ async function handleReviewSubmit(e) {
     } else {
         await supabase
             .from('reviews')
-            .insert([{
-                user_id: currentUser.id,
-                content
-            }]);
+            .insert([
+                { 
+                    user_id: currentUser.id, 
+                    content 
+                }
+            ]);
     }
 
     hideReviewModal();
@@ -132,10 +126,7 @@ async function handleReviewSubmit(e) {
 }
 
 async function loadReviews() {
-    const {
-        data: reviews,
-        error
-    } = await supabase
+    const { data: reviews, error } = await supabase
         .from('reviews')
         .select(`
             *,
@@ -146,9 +137,7 @@ async function loadReviews() {
             ),
             review_reactions(count)
         `)
-        .order('created_at', {
-            ascending: false
-        });
+        .order('created_at', { ascending: false });
 
     if (error) {
         console.error('Error loading reviews:', error);
@@ -171,7 +160,7 @@ function displayReviews(reviews) {
 function createReviewElement(review) {
     const div = document.createElement('div');
     div.className = 'review-card';
-
+    
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
 
@@ -217,7 +206,7 @@ function getTimeAgo(dateString) {
     const date = new Date(dateString);
     const now = new Date();
     const diff = now - date;
-
+    
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
@@ -237,11 +226,13 @@ window.handleReaction = async function(reviewId) {
 
     await supabase
         .from('review_reactions')
-        .upsert([{
-            review_id: reviewId,
-            user_id: currentUser.id,
-            reaction_type: 'like'
-        }], {
+        .upsert([
+            { 
+                review_id: reviewId, 
+                user_id: currentUser.id,
+                reaction_type: 'like'
+            }
+        ], {
             onConflict: 'review_id,user_id,reaction_type'
         });
 
@@ -256,7 +247,7 @@ window.showReplySection = function(reviewId) {
 
     const section = document.getElementById(`reply-section-${reviewId}`);
     const existingForm = section.querySelector('.reply-form');
-
+    
     if (existingForm) {
         existingForm.remove();
         return;
@@ -276,11 +267,13 @@ window.submitReply = async function(reviewId, content) {
 
     await supabase
         .from('review_replies')
-        .insert([{
-            review_id: reviewId,
-            user_id: currentUser.id,
-            content
-        }]);
+        .insert([
+            { 
+                review_id: reviewId, 
+                user_id: currentUser.id,
+                content 
+            }
+        ]);
 
     loadReviews();
 };
