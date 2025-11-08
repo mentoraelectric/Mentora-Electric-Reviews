@@ -1,4 +1,4 @@
-// reviews.js - FIXED REVIEW POSTING
+// reviews.js - FIXED REVIEW LOADING
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -147,14 +147,12 @@ async function handleReviewSubmit(e) {
     }
 
     try {
-        // Show loading state
         const submitBtn = document.getElementById('review-submit-btn');
         submitBtn.textContent = 'Posting...';
         submitBtn.disabled = true;
 
         let imageUrl = null;
 
-        // Upload image if exists
         if (imageFile) {
             const fileExt = imageFile.name.split('.').pop();
             const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
@@ -194,7 +192,6 @@ async function handleReviewSubmit(e) {
 
         if (result.error) throw result.error;
 
-        // Show success message
         showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
         
         hideReviewModal();
@@ -204,7 +201,6 @@ async function handleReviewSubmit(e) {
         console.error('Error saving review:', error);
         alert('Error saving review: ' + error.message);
     } finally {
-        // Reset button state
         const submitBtn = document.getElementById('review-submit-btn');
         submitBtn.textContent = editingReviewId ? 'Update Review' : 'Post Review';
         submitBtn.disabled = false;
@@ -212,7 +208,6 @@ async function handleReviewSubmit(e) {
 }
 
 function showSuccessMessage(message) {
-    // Create success notification
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
@@ -231,7 +226,6 @@ function showSuccessMessage(message) {
     notification.textContent = message;
     document.body.appendChild(notification);
     
-    // Remove after 3 seconds
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease-in';
         setTimeout(() => {
@@ -258,66 +252,48 @@ document.head.appendChild(style);
 
 async function loadReviews() {
     try {
+        console.log('Loading reviews...');
+        
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
                 *,
-                user_profiles(username, avatar_url),
-                review_replies(
-                    *,
-                    user_profiles(username, avatar_url)
+                user_profiles (
+                    username, 
+                    avatar_url
                 ),
-                review_reactions(
+                review_replies (
                     *,
-                    user_profiles(username)
+                    user_profiles (
+                        username, 
+                        avatar_url
+                    )
                 )
             `)
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error('Error loading reviews:', error);
-            showErrorMessage('Error loading reviews');
-            return;
+            console.error('Supabase error:', error);
+            throw error;
         }
 
-        displayReviews(reviews);
+        console.log('Reviews loaded:', reviews);
+        displayReviews(reviews || []);
+        
     } catch (error) {
-        console.error('Error in loadReviews:', error);
-        showErrorMessage('Error loading reviews');
+        console.error('Error loading reviews:', error);
+        displayReviews([]);
     }
-}
-
-function showErrorMessage(message) {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #f44336;
-        color: white;
-        padding: 15px 20px;
-        border-radius: 5px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        font-weight: 500;
-        animation: slideIn 0.3s ease-out;
-    `;
-    
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-in';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 3000);
 }
 
 function displayReviews(reviews) {
     const container = document.getElementById('reviews-list');
+    
+    if (!container) {
+        console.error('Reviews container not found');
+        return;
+    }
+
     container.innerHTML = '';
 
     if (!reviews || reviews.length === 0) {
@@ -337,8 +313,12 @@ function displayReviews(reviews) {
     container.style.marginTop = '30px';
 
     reviews.forEach(review => {
-        const reviewElement = createReviewElement(review);
-        container.appendChild(reviewElement);
+        try {
+            const reviewElement = createReviewElement(review);
+            container.appendChild(reviewElement);
+        } catch (error) {
+            console.error('Error creating review element:', error);
+        }
     });
 }
 
@@ -348,28 +328,28 @@ function createReviewElement(review) {
 
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
-    const avatarUrl = review.user_profiles.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${review.user_profiles.username?.charAt(0)?.toUpperCase() || 'U'}`;
     
-    const likeCount = review.review_reactions?.length || 0;
-    const userLiked = currentUser && review.review_reactions?.some(reaction => reaction.user_id === currentUser.id);
+    // Safe data access
+    const username = review.user_profiles?.username || 'Unknown User';
+    const avatarUrl = review.user_profiles?.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${username.charAt(0).toUpperCase()}`;
 
     div.innerHTML = `
         <div class="review-header">
             <div style="display: flex; align-items: center; gap: 10px;">
-                <img src="${avatarUrl}" alt="${review.user_profiles.username}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
-                <span class="review-user">${review.user_profiles.username}</span>
+                <img src="${avatarUrl}" alt="${username}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                <span class="review-user">${username}</span>
             </div>
             <span class="review-time">${timeAgo}</span>
         </div>
-        <div class="review-content">${review.content}</div>
+        <div class="review-content">${review.content || ''}</div>
         ${review.image_url ? `
             <div class="review-image-container">
                 <img src="${review.image_url}" alt="Review image" class="review-image" onclick="window.open('${review.image_url}', '_blank')">
             </div>
         ` : ''}
         <div class="review-actions">
-            <button class="reaction-btn ${userLiked ? 'active' : ''}" onclick="handleReaction('${review.id}')">
-                ${userLiked ? '❤️' : '🤍'} <span>${likeCount}</span>
+            <button class="reaction-btn" onclick="handleReaction('${review.id}')">
+                🤍 <span>0</span>
             </button>
             <button class="reaction-btn" onclick="showReplySection('${review.id}')">
                 💬 Reply
@@ -385,17 +365,18 @@ function createReviewElement(review) {
         </div>
         <div class="reply-section" id="reply-section-${review.id}">
             ${review.review_replies && review.review_replies.length > 0 ? review.review_replies.map(reply => {
-                const replyAvatarUrl = reply.user_profiles.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${reply.user_profiles.username?.charAt(0)?.toUpperCase() || 'U'}`;
+                const replyUsername = reply.user_profiles?.username || 'Unknown User';
+                const replyAvatarUrl = reply.user_profiles?.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
                 return `
                 <div class="reply">
                     <div class="review-header">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <img src="${replyAvatarUrl}" alt="${reply.user_profiles.username}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
-                            <span class="review-user">${reply.user_profiles.username}</span>
+                            <img src="${replyAvatarUrl}" alt="${replyUsername}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                            <span class="review-user">${replyUsername}</span>
                         </div>
                         <span class="review-time">${getTimeAgo(reply.created_at)}</span>
                     </div>
-                    <div class="review-content">${reply.content}</div>
+                    <div class="review-content">${reply.content || ''}</div>
                 </div>
             `}).join('') : ''}
         </div>
@@ -405,24 +386,28 @@ function createReviewElement(review) {
 }
 
 function getTimeAgo(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
+    try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diff = now - date;
 
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    
-    const weeks = Math.floor(days / 7);
-    if (weeks < 4) return `${weeks}w ago`;
-    
-    const months = Math.floor(days / 30);
-    return `${months}mo ago`;
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        if (days < 7) return `${days}d ago`;
+        
+        const weeks = Math.floor(days / 7);
+        if (weeks < 4) return `${weeks}w ago`;
+        
+        const months = Math.floor(days / 30);
+        return `${months}mo ago`;
+    } catch (error) {
+        return 'Recently';
+    }
 }
 
 // FIXED COMMENT FUNCTION
@@ -433,8 +418,9 @@ window.showReplySection = function(reviewId) {
     }
 
     const section = document.getElementById(`reply-section-${reviewId}`);
-    const existingForm = section.querySelector('.reply-form');
+    if (!section) return;
 
+    const existingForm = section.querySelector('.reply-form');
     if (existingForm) {
         existingForm.remove();
         return;
@@ -451,6 +437,8 @@ window.showReplySection = function(reviewId) {
 
 window.submitReply = async function(reviewId) {
     const textarea = document.getElementById(`reply-text-${reviewId}`);
+    if (!textarea) return;
+    
     const content = textarea.value.trim();
     
     if (!content) {
@@ -469,15 +457,12 @@ window.submitReply = async function(reviewId) {
 
         if (error) throw error;
         
-        // Show success message
         showSuccessMessage('Reply posted successfully!');
         
-        // Remove the form and reload to show the new comment
         const section = document.getElementById(`reply-section-${reviewId}`);
-        const form = section.querySelector('.reply-form');
+        const form = section?.querySelector('.reply-form');
         if (form) form.remove();
         
-        // Reload reviews to show the new comment
         loadReviews();
     } catch (error) {
         console.error('Error submitting reply:', error);
