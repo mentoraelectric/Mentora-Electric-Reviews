@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Mentora Electric Reviews</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <a href="https://mentoraelectric.vercel.app/index.html">Mentora Electric</a>
+            </div>
+            <div class="nav-menu">
+                <a href="https://mentoraelectric.vercel.app/index.html" class="nav-link">Home</a>
+                <a href="reviews.html" class="nav-link">Reviews</a>
+                <div class="nav-auth" id="nav-auth"></div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="profile-container">
+        <div class="profile-card">
+            <div class="profile-header">
+                <img id="profile-avatar" src="" alt="Profile Avatar" class="profile-avatar">
+                <h2 id="profile-username">User Profile</h2>
+            </div>
+            
+            <form id="profile-form">
+                <div class="avatar-upload">
+                    <label for="avatar-upload">Change Avatar:</label>
+                    <input type="file" id="avatar-upload" accept="image/*" class="file-input">
+                    <small>Max 2MB - JPG, PNG, GIF</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" disabled>
+                    <small>Email cannot be changed</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="current-password">Current Password (to change password)</label>
+                    <input type="password" id="current-password">
+                </div>
+                
+                <div class="form-group">
+                    <label for="new-password">New Password</label>
+                    <input type="password" id="new-password">
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirm-password">Confirm New Password</label>
+                    <input type="password" id="confirm-password">
+                </div>
+                
+                <button type="submit" class="auth-button" id="save-profile-btn">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="profile.js"></script>
+</body>
+</html>
