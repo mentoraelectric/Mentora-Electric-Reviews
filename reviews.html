@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +7,6 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-
 <body>
     <nav class="navbar">
         <div class="nav-container">
@@ -41,6 +39,18 @@
                 <div class="form-group">
                     <textarea id="review-content" rows="5" placeholder="Share your thoughts about our products..." required></textarea>
                 </div>
+                
+                <div class="form-group">
+                    <label for="review-image">Add Image (Optional)</label>
+                    <input type="file" id="review-image" accept="image/*">
+                    <small>Max 5MB - JPG, PNG, GIF</small>
+                </div>
+                
+                <img id="image-preview" class="image-preview" alt="Image preview">
+                <button type="button" id="remove-image-btn" onclick="removeImage()" style="display: none; margin-bottom: 15px; padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Remove Image
+                </button>
+                
                 <button type="submit" class="auth-button" id="review-submit-btn">Post Review</button>
             </form>
         </div>
@@ -48,5 +58,4 @@
 
     <script type="module" src="reviews.js"></script>
 </body>
-
 </html>
