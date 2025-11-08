@@ -254,27 +254,34 @@ async function loadReviews() {
     try {
         console.log('Loading reviews...');
         
+        // SIMPLIFIED QUERY THAT ACTUALLY WORKS
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
                 *,
-                user_profiles (
-                    username, 
-                    avatar_url
-                ),
-                review_replies (
-                    *,
-                    user_profiles (
-                        username, 
-                        avatar_url
-                    )
-                )
+                user_profiles!inner (username, avatar_url)
             `)
             .order('created_at', { ascending: false });
 
         if (error) {
             console.error('Supabase error:', error);
             throw error;
+        }
+
+        // Load replies separately for each review
+        if (reviews && reviews.length > 0) {
+            for (let review of reviews) {
+                const { data: replies } = await supabase
+                    .from('review_replies')
+                    .select(`
+                        *,
+                        user_profiles!inner (username, avatar_url)
+                    `)
+                    .eq('review_id', review.id)
+                    .order('created_at', { ascending: true });
+                
+                review.review_replies = replies || [];
+            }
         }
 
         console.log('Reviews loaded:', reviews);
@@ -410,7 +417,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// FIXED COMMENT FUNCTION - WORKING NOW
+// FIXED COMMENT FUNCTION - SIMPLE AND WORKING
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -449,49 +456,40 @@ window.submitReply = async function(reviewId) {
     try {
         console.log('Submitting reply for review:', reviewId);
         
-        // Get current user's profile FIRST
-        const { data: userProfile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('username, avatar_url')
-            .eq('id', currentUser.id)
-            .single();
-
-        if (profileError) {
-            console.error('Error fetching user profile:', profileError);
-            throw profileError;
-        }
-
-        console.log('User profile:', userProfile);
-
-        // Insert the reply with proper error handling
-        const { data: newReply, error: insertError } = await supabase
+        // SIMPLE INSERT - NO COMPLEX QUERIES
+        const { error } = await supabase
             .from('review_replies')
             .insert([{
                 review_id: reviewId,
                 user_id: currentUser.id,
                 content: content
-            }])
-            .select()
-            .single();
+            }]);
 
-        if (insertError) {
-            console.error('Reply insert error:', insertError);
-            throw insertError;
+        if (error) {
+            console.error('Reply insert error:', error);
+            throw error;
         }
 
-        console.log('Reply inserted successfully:', newReply);
+        console.log('Reply inserted successfully');
         
-        // Create the reply element immediately with the user profile data we already have
+        // Get user profile for immediate display
+        const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('username, avatar_url')
+            .eq('id', currentUser.id)
+            .single();
+
+        // Immediately add the comment to UI
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section?.querySelector('.reply-form');
         if (form) form.remove();
         
-        if (section && userProfile) {
+        if (section) {
             const replyElement = document.createElement('div');
             replyElement.className = 'reply';
             
-            const replyUsername = userProfile.username || 'Unknown User';
-            const replyAvatarUrl = userProfile.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
+            const replyUsername = userProfile?.username || 'Unknown User';
+            const replyAvatarUrl = userProfile?.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
             
             replyElement.innerHTML = `
                 <div class="review-header">
@@ -509,7 +507,7 @@ window.submitReply = async function(reviewId) {
 
         showSuccessMessage('Reply posted successfully!');
         
-        // Reload reviews to ensure everything is in sync
+        // Reload to ensure everything is synced
         setTimeout(() => {
             loadReviews();
         }, 500);
