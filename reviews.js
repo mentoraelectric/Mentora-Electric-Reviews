@@ -35,6 +35,7 @@ async function updateNavForAuth() {
         <div class="user-menu">
             <span class="nav-link">${profile?.username || 'User'}</span>
             <div class="user-dropdown" id="user-dropdown">
+                <a href="#" id="profile-link">Profile</a>
                 ${profile?.is_admin ? '<a href="admin.html">Admin Panel</a>' : ''}
                 <a href="#" id="logout-link">Logout</a>
             </div>
@@ -46,6 +47,10 @@ async function updateNavForAuth() {
 
 function setupAuthListeners() {
     document.getElementById('logout-link')?.addEventListener('click', handleLogout);
+    document.getElementById('profile-link')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = 'profile.html';
+    });
     document.querySelector('.user-menu')?.addEventListener('click', function(e) {
         document.getElementById('user-dropdown').classList.toggle('show');
     });
@@ -60,6 +65,7 @@ function setupEventListeners() {
     document.getElementById('add-review-btn')?.addEventListener('click', showReviewModal);
     document.getElementById('close-review-modal')?.addEventListener('click', hideReviewModal);
     document.getElementById('review-form')?.addEventListener('submit', handleReviewSubmit);
+    document.getElementById('review-image')?.addEventListener('change', handleImagePreview);
 
     // Close modal when clicking outside
     document.getElementById('review-modal')?.addEventListener('click', function(e) {
@@ -77,17 +83,32 @@ function showReviewModal(review = null) {
     const title = document.getElementById('review-modal-title');
     const content = document.getElementById('review-content');
     const submitBtn = document.getElementById('review-submit-btn');
+    const imageInput = document.getElementById('review-image');
+    const imagePreview = document.getElementById('image-preview');
+    const removeImageBtn = document.getElementById('remove-image-btn');
 
     if (review) {
         editingReviewId = review.id;
         title.textContent = 'Edit Review';
         content.value = review.content;
         submitBtn.textContent = 'Update Review';
+        
+        if (review.image_url) {
+            imagePreview.src = review.image_url;
+            imagePreview.classList.add('show');
+            removeImageBtn.style.display = 'block';
+        } else {
+            imagePreview.classList.remove('show');
+            removeImageBtn.style.display = 'none';
+        }
     } else {
         editingReviewId = null;
         title.textContent = 'Share Your Review';
         content.value = '';
         submitBtn.textContent = 'Post Review';
+        imageInput.value = '';
+        imagePreview.classList.remove('show');
+        removeImageBtn.style.display = 'none';
     }
 
     modal.style.display = 'block';
@@ -98,9 +119,32 @@ function hideReviewModal() {
     editingReviewId = null;
 }
 
+function handleImagePreview(event) {
+    const file = event.target.files[0];
+    const preview = document.getElementById('image-preview');
+    const removeBtn = document.getElementById('remove-image-btn');
+
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.classList.add('show');
+            removeBtn.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+window.removeImage = function() {
+    document.getElementById('review-image').value = '';
+    document.getElementById('image-preview').classList.remove('show');
+    document.getElementById('remove-image-btn').style.display = 'none';
+}
+
 async function handleReviewSubmit(e) {
     e.preventDefault();
     const content = document.getElementById('review-content').value.trim();
+    const imageFile = document.getElementById('review-image').files[0];
 
     if (!content) {
         alert('Please enter review content');
@@ -108,11 +152,33 @@ async function handleReviewSubmit(e) {
     }
 
     try {
+        let imageUrl = null;
+
+        // Upload image if exists
+        if (imageFile) {
+            const fileExt = imageFile.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `review-images/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('review-images')
+                .upload(filePath, imageFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('review-images')
+                .getPublicUrl(filePath);
+
+            imageUrl = publicUrl;
+        }
+
         if (editingReviewId) {
             const { error } = await supabase
                 .from('reviews')
                 .update({
                     content,
+                    image_url: imageUrl,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', editingReviewId);
@@ -123,7 +189,8 @@ async function handleReviewSubmit(e) {
                 .from('reviews')
                 .insert([{
                     user_id: currentUser.id,
-                    content
+                    content,
+                    image_url: imageUrl
                 }]);
 
             if (error) throw error;
@@ -188,6 +255,7 @@ function createReviewElement(review) {
             <span class="review-time">${timeAgo}</span>
         </div>
         <div class="review-content">${review.content}</div>
+        ${review.image_url ? `<img src="${review.image_url}" alt="Review image" class="review-image" onclick="window.open('${review.image_url}', '_blank')" style="cursor: pointer;">` : ''}
         <div class="review-actions">
             <button class="reaction-btn" onclick="handleReaction('${review.id}')">
                 👍 <span>${likeCount}</span>
@@ -278,7 +346,7 @@ window.showReplySection = function(reviewId) {
     form.className = 'reply-form';
     form.innerHTML = `
         <textarea placeholder="Write a reply..." rows="2" style="width: 100%; margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"></textarea>
-        <button onclick="submitReply('${reviewId}', this.previousElementSibling.value)" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Reply</button>
+        <button onclick="submitReply('${reviewId}', this.previousElementSibling.value)" style="padding: 8px 16px; background: #1e3c72; color: white; border: none; border-radius: 5px; cursor: pointer;">Reply</button>
     `;
     section.appendChild(form);
 };
