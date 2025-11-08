@@ -1,4 +1,4 @@
-// reviews.js - FIXED COMMENT POSTING
+// reviews.js - FIXED REVIEW LOADING
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -190,17 +190,12 @@ async function handleReviewSubmit(e) {
                 }]);
         }
 
-        if (result.error) {
-            console.error('Database error:', result.error);
-            throw result.error;
-        }
+        if (result.error) throw result.error;
 
         showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
         
         hideReviewModal();
-        setTimeout(() => {
-            loadReviews();
-        }, 500);
+        loadReviews();
         
     } catch (error) {
         console.error('Error saving review:', error);
@@ -257,48 +252,32 @@ document.head.appendChild(style);
 
 async function loadReviews() {
     try {
-        console.log('Loading reviews from database...');
+        console.log('Loading reviews...');
         
-        // SIMPLE WORKING QUERY
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
                 *,
-                user_profiles!inner (username, avatar_url)
+                user_profiles (
+                    username, 
+                    avatar_url
+                ),
+                review_replies (
+                    *,
+                    user_profiles (
+                        username, 
+                        avatar_url
+                    )
+                )
             `)
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error('Database query error:', error);
+            console.error('Supabase error:', error);
             throw error;
         }
 
-        console.log('Raw reviews data:', reviews);
-        
-        // Load replies separately for each review
-        if (reviews && reviews.length > 0) {
-            for (let review of reviews) {
-                const { data: replies } = await supabase
-                    .from('review_replies')
-                    .select(`
-                        *,
-                        user_profiles!inner (username, avatar_url)
-                    `)
-                    .eq('review_id', review.id)
-                    .order('created_at', { ascending: true });
-                
-                review.review_replies = replies || [];
-                
-                // Load reactions separately
-                const { data: reactions } = await supabase
-                    .from('review_reactions')
-                    .select('*')
-                    .eq('review_id', review.id);
-                
-                review.review_reactions = reactions || [];
-            }
-        }
-
+        console.log('Reviews loaded:', reviews);
         displayReviews(reviews || []);
         
     } catch (error) {
@@ -311,13 +290,11 @@ function displayReviews(reviews) {
     const container = document.getElementById('reviews-list');
     
     if (!container) {
-        console.error('Reviews container not found!');
+        console.error('Reviews container not found');
         return;
     }
 
     container.innerHTML = '';
-
-    console.log('Displaying reviews:', reviews);
 
     if (!reviews || reviews.length === 0) {
         container.innerHTML = `
@@ -335,13 +312,12 @@ function displayReviews(reviews) {
     container.style.gap = '20px';
     container.style.marginTop = '30px';
 
-    reviews.forEach((review, index) => {
-        console.log(`Creating review ${index + 1}:`, review);
+    reviews.forEach(review => {
         try {
             const reviewElement = createReviewElement(review);
             container.appendChild(reviewElement);
         } catch (error) {
-            console.error(`Error creating review element ${index + 1}:`, error);
+            console.error('Error creating review element:', error);
         }
     });
 }
@@ -353,18 +329,9 @@ function createReviewElement(review) {
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
     
-    // SAFE data access
-    let username = 'Unknown User';
-    let avatarUrl = 'https://via.placeholder.com/40/1e3c72/ffffff?text=U';
-    
-    if (review.user_profiles) {
-        username = review.user_profiles.username || 'Unknown User';
-        avatarUrl = review.user_profiles.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${username.charAt(0).toUpperCase()}`;
-    }
-
-    // Count likes
-    const likeCount = review.review_reactions?.length || 0;
-    const userLiked = currentUser && review.review_reactions?.some(reaction => reaction.user_id === currentUser.id);
+    // Safe data access
+    const username = review.user_profiles?.username || 'Unknown User';
+    const avatarUrl = review.user_profiles?.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${username.charAt(0).toUpperCase()}`;
 
     div.innerHTML = `
         <div class="review-header">
@@ -374,15 +341,15 @@ function createReviewElement(review) {
             </div>
             <span class="review-time">${timeAgo}</span>
         </div>
-        <div class="review-content">${review.content || 'No content'}</div>
+        <div class="review-content">${review.content || ''}</div>
         ${review.image_url ? `
             <div class="review-image-container">
                 <img src="${review.image_url}" alt="Review image" class="review-image" onclick="window.open('${review.image_url}', '_blank')">
             </div>
         ` : ''}
         <div class="review-actions">
-            <button class="reaction-btn ${userLiked ? 'active' : ''}" onclick="handleReaction('${review.id}')">
-                ${userLiked ? '❤️' : '🤍'} <span>${likeCount}</span>
+            <button class="reaction-btn" onclick="handleReaction('${review.id}')">
+                🤍 <span>0</span>
             </button>
             <button class="reaction-btn" onclick="showReplySection('${review.id}')">
                 💬 Reply
@@ -431,7 +398,7 @@ function getTimeAgo(dateString) {
         if (minutes < 1) return 'Just now';
         if (minutes < 60) return `${minutes}m ago`;
         if (hours < 24) return `${hours}h ago`;
-        if (days < 7) return `${days}d ago';
+        if (days < 7) return `${days}d ago`;
         
         const weeks = Math.floor(days / 7);
         if (weeks < 4) return `${weeks}w ago`;
@@ -443,7 +410,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// FIXED COMMENT FUNCTIONS - SIMPLE AND WORKING
+// FIXED COMMENT FUNCTION
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -480,33 +447,22 @@ window.submitReply = async function(reviewId) {
     }
 
     try {
-        console.log('Submitting reply for review:', reviewId);
-        console.log('Reply content:', content);
-        console.log('Current user:', currentUser.id);
-
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('review_replies')
             .insert([{
                 review_id: reviewId,
                 user_id: currentUser.id,
                 content: content
-            }])
-            .select();
+            }]);
 
-        if (error) {
-            console.error('Reply insert error:', error);
-            throw error;
-        }
-
-        console.log('Reply inserted successfully:', data);
+        if (error) throw error;
+        
         showSuccessMessage('Reply posted successfully!');
         
-        // Clear the form
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section?.querySelector('.reply-form');
         if (form) form.remove();
         
-        // Reload to show the new comment
         loadReviews();
     } catch (error) {
         console.error('Error submitting reply:', error);
