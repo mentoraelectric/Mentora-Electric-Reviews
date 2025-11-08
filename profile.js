@@ -50,11 +50,28 @@ function setupEventListeners() {
 
 async function loadProfile() {
     try {
-        const { data: profile, error } = await supabase
+        // First check if user profile exists
+        let { data: profile, error } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', currentUser.id)
-            .single();
+            .maybeSingle();
+
+        // If profile doesn't exist, create one
+        if (!profile) {
+            const username = currentUser.email.split('@')[0] || 'user_' + currentUser.id.substring(0, 8);
+            const { data: newProfile, error: createError } = await supabase
+                .from('user_profiles')
+                .insert([{
+                    id: currentUser.id,
+                    username: username
+                }])
+                .select()
+                .single();
+
+            if (createError) throw createError;
+            profile = newProfile;
+        }
 
         if (error) throw error;
 
@@ -64,7 +81,7 @@ async function loadProfile() {
         if (profile.avatar_url) {
             document.getElementById('profile-avatar').src = profile.avatar_url;
         } else {
-            document.getElementById('profile-avatar').src = 'https://via.placeholder.com/100?text=USER';
+            document.getElementById('profile-avatar').src = 'https://via.placeholder.com/100/1e3c72/ffffff?text=' + (profile.username?.charAt(0)?.toUpperCase() || 'U');
         }
         
         document.getElementById('profile-username').textContent = profile.username || 'User';
@@ -85,16 +102,29 @@ async function handleAvatarUpload(event) {
     }
 
     // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-        alert('Please select a valid image file (JPEG, PNG, GIF)');
+        alert('Please select a valid image file (JPEG, PNG, GIF, WEBP)');
         return;
     }
 
     try {
+        // Create storage bucket if it doesn't exist
+        const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+        if (bucketsError) throw bucketsError;
+
+        const avatarsBucket = buckets.find(bucket => bucket.name === 'avatars');
+        if (!avatarsBucket) {
+            const { error: createError } = await supabase.storage.createBucket('avatars', {
+                public: true,
+                fileSizeLimit: 2097152 // 2MB
+            });
+            if (createError) throw createError;
+        }
+
         const fileExt = file.name.split('.').pop();
         const fileName = `${currentUser.id}/avatar.${fileExt}`;
-        const filePath = `avatars/${fileName}`;
+        const filePath = fileName;
 
         // Upload avatar
         const { error: uploadError } = await supabase.storage
@@ -117,7 +147,7 @@ async function handleAvatarUpload(event) {
         if (updateError) throw updateError;
 
         // Update avatar display
-        document.getElementById('profile-avatar').src = publicUrl;
+        document.getElementById('profile-avatar').src = publicUrl + '?t=' + new Date().getTime();
         alert('Avatar updated successfully!');
     } catch (error) {
         console.error('Error uploading avatar:', error);
