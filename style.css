@@ -465,3 +465,99 @@ body {
         font-size: 0.9rem;
     }
 }
+/* Add to existing style.css */
+
+/* Gallery layout for reviews */
+.reviews-container {
+    max-width: 1200px;
+    margin: 100px auto 40px;
+    padding: 0 20px;
+}
+
+.review-image-container {
+    margin: 10px 0;
+    text-align: center;
+}
+
+.review-image {
+    max-width: 100%;
+    max-height: 400px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.review-image:hover {
+    transform: scale(1.02);
+}
+
+.reaction-btn.active {
+    background: #1e3c72;
+    color: white;
+    border-color: #1e3c72;
+}
+
+/* Footer styles */
+.footer {
+    background: white;
+    padding: 40px 20px;
+    margin-top: 60px;
+    border-top: 1px solid #eee;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 40px;
+}
+
+.footer-section h3 {
+    color: #1e3c72;
+    margin-bottom: 20px;
+}
+
+.footer-section p {
+    color: #666;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.footer-section ul {
+    list-style: none;
+}
+
+.footer-section ul li {
+    margin-bottom: 8px;
+    color: #666;
+}
+
+.footer-section ul li:before {
+    content: "•";
+    color: #1e3c72;
+    margin-right: 8px;
+}
+
+.footer-bottom {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    margin-top: 30px;
+    color: #666;
+}
+
+/* Responsive gallery */
+@media (max-width: 768px) {
+    .reviews-container {
+        grid-template-columns: 1fr;
+        margin-top: 80px;
+    }
+    
+    .footer-content {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+}
