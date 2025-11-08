@@ -1,6 +1,4 @@
-import {
-    supabase
-} from './supabase-config.js';
+import { supabase } from './supabase-config.js';
 
 let currentUser = null;
 
@@ -9,29 +7,23 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function checkAuthAndAdmin() {
-    const {
-        data: {
-            session
-        }
-    } = await supabase.auth.getSession();
-
+    const { data: { session } } = await supabase.auth.getSession();
+    
     if (!session) {
         window.location.href = 'auth.html?mode=login';
         return;
     }
 
     currentUser = session.user;
-
+    
     // Check if user is admin
-    const {
-        data: profile
-    } = await supabase
+    const { data: profile } = await supabase
         .from('user_profiles')
         .select('is_admin')
         .eq('id', currentUser.id)
         .single();
 
-    if (!profile ? .is_admin) {
+    if (!profile?.is_admin) {
         alert('Access denied. Admin privileges required.');
         window.location.href = 'reviews.html';
         return;
@@ -67,32 +59,17 @@ async function handleLogout() {
 
 async function loadAdminData() {
     // Get stats
-    const {
-        count: reviewsCount
-    } = await supabase
+    const { count: reviewsCount } = await supabase
         .from('reviews')
-        .select('*', {
-            count: 'exact',
-            head: true
-        });
+        .select('*', { count: 'exact', head: true });
 
-    const {
-        count: usersCount
-    } = await supabase
+    const { count: usersCount } = await supabase
         .from('user_profiles')
-        .select('*', {
-            count: 'exact',
-            head: true
-        });
+        .select('*', { count: 'exact', head: true });
 
-    const {
-        count: repliesCount
-    } = await supabase
+    const { count: repliesCount } = await supabase
         .from('review_replies')
-        .select('*', {
-            count: 'exact',
-            head: true
-        });
+        .select('*', { count: 'exact', head: true });
 
     document.getElementById('admin-stats').innerHTML = `
         <div class="features">
@@ -113,10 +90,7 @@ async function loadAdminData() {
 }
 
 async function loadReviews() {
-    const {
-        data: reviews,
-        error
-    } = await supabase
+    const { data: reviews, error } = await supabase
         .from('reviews')
         .select(`
             *,
@@ -126,9 +100,7 @@ async function loadReviews() {
                 user_profiles(username)
             )
         `)
-        .order('created_at', {
-            ascending: false
-        });
+        .order('created_at', { ascending: false });
 
     if (error) {
         console.error('Error loading reviews:', error);
@@ -151,7 +123,7 @@ function displayReviews(reviews) {
 function createReviewElement(review) {
     const div = document.createElement('div');
     div.className = 'review-card';
-
+    
     const timeAgo = getTimeAgo(review.created_at);
 
     div.innerHTML = `
@@ -193,7 +165,7 @@ function getTimeAgo(dateString) {
     const date = new Date(dateString);
     const now = new Date();
     const diff = now - date;
-
+    
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
@@ -211,11 +183,13 @@ window.adminReply = async function(reviewId) {
 
     await supabase
         .from('review_replies')
-        .insert([{
-            review_id: reviewId,
-            user_id: currentUser.id,
-            content
-        }]);
+        .insert([
+            { 
+                review_id: reviewId, 
+                user_id: currentUser.id,
+                content 
+            }
+        ]);
 
     loadReviews();
 };
