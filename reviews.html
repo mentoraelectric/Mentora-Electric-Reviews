@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reviews - Mentora Electric Reviews</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <a href="https://mentoraelectric.vercel.app/index.html">Mentora Electric</a>
+            </div>
+            <div class="nav-menu">
+                <a href="https://mentoraelectric.vercel.app/index.html" class="nav-link">Home</a>
+                <a href="reviews.html" class="nav-link">Reviews</a>
+                <div class="nav-auth" id="nav-auth">
+                    <a href="auth.html?mode=login" class="nav-link" id="auth-link">Sign In</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="reviews-container">
+        <h1>Customer Reviews</h1>
+        <div id="reviews-list"></div>
+    </div>
+
+    <button class="add-review-btn" id="add-review-btn" style="display: none;">+</button>
+
+    <!-- Review Modal -->
+    <div class="modal" id="review-modal">
+        <div class="modal-content">
+            <span class="close-modal" id="close-review-modal">&times;</span>
+            <h2 id="review-modal-title">Share Your Review</h2>
+            <form id="review-form">
+                <div class="form-group">
+                    <textarea id="review-content" rows="5" placeholder="Share your thoughts about our products..." required></textarea>
+                </div>
+                <button type="submit" class="auth-button" id="review-submit-btn">Post Review</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="reviews.js"></script>
+</body>
+
+</html>

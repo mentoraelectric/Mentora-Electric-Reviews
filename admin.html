@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Mentora Electric Reviews</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <a href="https://mentoraelectric.vercel.app/index.html">Mentora Electric</a>
+            </div>
+            <div class="nav-menu">
+                <a href="https://mentoraelectric.vercel.app/index.html" class="nav-link">Home</a>
+                <a href="reviews.html" class="nav-link">Reviews</a>
+                <div class="nav-auth" id="nav-auth"></div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="reviews-container">
+        <h1>Admin Panel</h1>
+        <div id="admin-content">
+            <div class="admin-stats" id="admin-stats"></div>
+            <div id="reviews-list"></div>
+        </div>
+    </div>
+
+    <script type="module" src="admin.js"></script>
+</body>
+
+</html>
