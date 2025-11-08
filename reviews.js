@@ -1,4 +1,4 @@
-// reviews.js - FIXED COMMENT FUNCTIONALITY
+// reviews.js - FIXED COMMENT DISPLAY
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -410,7 +410,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// FIXED COMMENT FUNCTION - NOW WORKING PROPERLY
+// FIXED COMMENT FUNCTION - WORKING NOW
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -449,50 +449,49 @@ window.submitReply = async function(reviewId) {
     try {
         console.log('Submitting reply for review:', reviewId);
         
-        // Get current user's profile to include username immediately
-        const { data: userProfile } = await supabase
+        // Get current user's profile FIRST
+        const { data: userProfile, error: profileError } = await supabase
             .from('user_profiles')
             .select('username, avatar_url')
             .eq('id', currentUser.id)
             .single();
 
-        // Insert the reply
-        const { data: newReply, error } = await supabase
+        if (profileError) {
+            console.error('Error fetching user profile:', profileError);
+            throw profileError;
+        }
+
+        console.log('User profile:', userProfile);
+
+        // Insert the reply with proper error handling
+        const { data: newReply, error: insertError } = await supabase
             .from('review_replies')
             .insert([{
                 review_id: reviewId,
                 user_id: currentUser.id,
                 content: content
             }])
-            .select(`
-                *,
-                user_profiles (
-                    username,
-                    avatar_url
-                )
-            `)
+            .select()
             .single();
 
-        if (error) {
-            console.error('Reply insert error:', error);
-            throw error;
+        if (insertError) {
+            console.error('Reply insert error:', insertError);
+            throw insertError;
         }
 
         console.log('Reply inserted successfully:', newReply);
-        showSuccessMessage('Reply posted successfully!');
         
-        // Immediately add the new comment to the UI without reloading the entire page
+        // Create the reply element immediately with the user profile data we already have
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section?.querySelector('.reply-form');
         if (form) form.remove();
         
-        // Create and append the new reply element immediately
-        if (newReply && section) {
+        if (section && userProfile) {
             const replyElement = document.createElement('div');
             replyElement.className = 'reply';
             
-            const replyUsername = newReply.user_profiles?.username || 'Unknown User';
-            const replyAvatarUrl = newReply.user_profiles?.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
+            const replyUsername = userProfile.username || 'Unknown User';
+            const replyAvatarUrl = userProfile.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
             
             replyElement.innerHTML = `
                 <div class="review-header">
@@ -502,16 +501,18 @@ window.submitReply = async function(reviewId) {
                     </div>
                     <span class="review-time">Just now</span>
                 </div>
-                <div class="review-content">${newReply.content || ''}</div>
+                <div class="review-content">${content}</div>
             `;
             
             section.appendChild(replyElement);
         }
+
+        showSuccessMessage('Reply posted successfully!');
         
-        // Also reload reviews to ensure everything is in sync
+        // Reload reviews to ensure everything is in sync
         setTimeout(() => {
             loadReviews();
-        }, 1000);
+        }, 500);
         
     } catch (error) {
         console.error('Error submitting reply:', error);
@@ -580,3 +581,6 @@ window.deleteReview = async function(reviewId) {
         alert('Error deleting review: ' + error.message);
     }
 };
+
+// FIX FOR "WRITE FIRST REVIEW" BUTTON - Add global function
+window.showReviewModal = showReviewModal;
