@@ -1,4 +1,4 @@
-// reviews.js - FIXED REVIEW LOADING
+// reviews.js - FIXED REVIEW DISPLAY
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -190,12 +190,19 @@ async function handleReviewSubmit(e) {
                 }]);
         }
 
-        if (result.error) throw result.error;
+        if (result.error) {
+            console.error('Database error:', result.error);
+            throw result.error;
+        }
 
+        console.log('Review saved successfully:', result.data);
         showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
         
         hideReviewModal();
-        loadReviews();
+        // Force reload reviews with a small delay to ensure database is updated
+        setTimeout(() => {
+            loadReviews();
+        }, 500);
         
     } catch (error) {
         console.error('Error saving review:', error);
@@ -252,36 +259,33 @@ document.head.appendChild(style);
 
 async function loadReviews() {
     try {
-        console.log('Loading reviews...');
+        console.log('Loading reviews from database...');
         
+        // SIMPLE QUERY - just get reviews and user profiles first
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
                 *,
-                user_profiles (
-                    username, 
-                    avatar_url
-                ),
-                review_replies (
-                    *,
-                    user_profiles (
-                        username, 
-                        avatar_url
-                    )
-                )
+                user_profiles:user_id (username, avatar_url)
             `)
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error('Supabase error:', error);
+            console.error('Database query error:', error);
             throw error;
         }
 
-        console.log('Reviews loaded:', reviews);
+        console.log('Raw reviews data:', reviews);
+        
+        if (reviews && reviews.length > 0) {
+            console.log('First review sample:', reviews[0]);
+        }
+
         displayReviews(reviews || []);
         
     } catch (error) {
         console.error('Error loading reviews:', error);
+        // Show empty state but don't throw error to user
         displayReviews([]);
     }
 }
@@ -290,11 +294,13 @@ function displayReviews(reviews) {
     const container = document.getElementById('reviews-list');
     
     if (!container) {
-        console.error('Reviews container not found');
+        console.error('Reviews container not found!');
         return;
     }
 
     container.innerHTML = '';
+
+    console.log('Displaying reviews:', reviews);
 
     if (!reviews || reviews.length === 0) {
         container.innerHTML = `
@@ -307,17 +313,19 @@ function displayReviews(reviews) {
         return;
     }
 
+    // Reset styles first
     container.style.display = 'grid';
     container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(350px, 1fr))';
     container.style.gap = '20px';
     container.style.marginTop = '30px';
 
-    reviews.forEach(review => {
+    reviews.forEach((review, index) => {
+        console.log(`Creating review ${index + 1}:`, review);
         try {
             const reviewElement = createReviewElement(review);
             container.appendChild(reviewElement);
         } catch (error) {
-            console.error('Error creating review element:', error);
+            console.error(`Error creating review element ${index + 1}:`, error);
         }
     });
 }
@@ -329,9 +337,14 @@ function createReviewElement(review) {
     const timeAgo = getTimeAgo(review.created_at);
     const isOwner = currentUser && review.user_id === currentUser.id;
     
-    // Safe data access
-    const username = review.user_profiles?.username || 'Unknown User';
-    const avatarUrl = review.user_profiles?.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${username.charAt(0).toUpperCase()}`;
+    // SAFE data access - handle nested user_profiles object
+    let username = 'Unknown User';
+    let avatarUrl = 'https://via.placeholder.com/40/1e3c72/ffffff?text=U';
+    
+    if (review.user_profiles) {
+        username = review.user_profiles.username || 'Unknown User';
+        avatarUrl = review.user_profiles.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${username.charAt(0).toUpperCase()}`;
+    }
 
     div.innerHTML = `
         <div class="review-header">
@@ -341,7 +354,7 @@ function createReviewElement(review) {
             </div>
             <span class="review-time">${timeAgo}</span>
         </div>
-        <div class="review-content">${review.content || ''}</div>
+        <div class="review-content">${review.content || 'No content'}</div>
         ${review.image_url ? `
             <div class="review-image-container">
                 <img src="${review.image_url}" alt="Review image" class="review-image" onclick="window.open('${review.image_url}', '_blank')">
@@ -364,21 +377,7 @@ function createReviewElement(review) {
             ` : ''}
         </div>
         <div class="reply-section" id="reply-section-${review.id}">
-            ${review.review_replies && review.review_replies.length > 0 ? review.review_replies.map(reply => {
-                const replyUsername = reply.user_profiles?.username || 'Unknown User';
-                const replyAvatarUrl = reply.user_profiles?.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
-                return `
-                <div class="reply">
-                    <div class="review-header">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <img src="${replyAvatarUrl}" alt="${replyUsername}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
-                            <span class="review-user">${replyUsername}</span>
-                        </div>
-                        <span class="review-time">${getTimeAgo(reply.created_at)}</span>
-                    </div>
-                    <div class="review-content">${reply.content || ''}</div>
-                </div>
-            `}).join('') : ''}
+            <!-- Replies will be loaded separately if needed -->
         </div>
     `;
 
@@ -398,7 +397,7 @@ function getTimeAgo(dateString) {
         if (minutes < 1) return 'Just now';
         if (minutes < 60) return `${minutes}m ago`;
         if (hours < 24) return `${hours}h ago`;
-        if (days < 7) return `${days}d ago`;
+        if (days < 7) return `${days}d ago';
         
         const weeks = Math.floor(days / 7);
         if (weeks < 4) return `${weeks}w ago`;
@@ -410,7 +409,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// FIXED COMMENT FUNCTION
+// Comment functions
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
