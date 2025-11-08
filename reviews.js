@@ -1,4 +1,4 @@
-// reviews.js - COMPLETELY FIXED VERSION
+// reviews.js - FIXED DATABASE OPERATIONS
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -242,7 +242,8 @@ async function handleReviewSubmit(e) {
                     user_id: currentUser.id,
                     content,
                     image_url: imageUrl
-                }]);
+                }])
+                .select(); // IMPORTANT: Add .select() to get the inserted data back
         }
 
         if (result.error) {
@@ -250,15 +251,13 @@ async function handleReviewSubmit(e) {
             throw result.error;
         }
 
-        console.log('Review saved successfully!');
+        console.log('Review saved successfully!', result);
         showSuccessMessage(editingReviewId ? 'Review updated successfully!' : 'Review posted successfully!');
         
         hideReviewModal();
         
-        // Reload reviews after a short delay to ensure data is persisted
-        setTimeout(() => {
-            loadReviews();
-        }, 1000);
+        // Reload reviews immediately
+        await loadReviews();
         
     } catch (error) {
         console.error('Error saving review:', error);
@@ -317,16 +316,13 @@ async function loadReviews() {
     console.log('Loading reviews from database...');
     
     try {
-        // First, let's check if the reviews table exists and has data
-        const { data: reviews, error, count } = await supabase
+        // SIMPLIFIED QUERY - Use the working format from your original code
+        const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
                 *,
-                user_profiles (
-                    username,
-                    avatar_url
-                )
-            `, { count: 'exact' })
+                user_profiles!inner (username, avatar_url)
+            `)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -334,7 +330,7 @@ async function loadReviews() {
             throw error;
         }
 
-        console.log(`Found ${reviews ? reviews.length : 0} reviews`);
+        console.log(`Found ${reviews ? reviews.length : 0} reviews`, reviews);
 
         // Load replies for each review
         if (reviews && reviews.length > 0) {
@@ -344,10 +340,7 @@ async function loadReviews() {
                     .from('review_replies')
                     .select(`
                         *,
-                        user_profiles (
-                            username,
-                            avatar_url
-                        )
+                        user_profiles!inner (username, avatar_url)
                     `)
                     .eq('review_id', review.id)
                     .order('created_at', { ascending: true });
@@ -436,7 +429,7 @@ function createReviewElement(review) {
                 💬 Reply
             </button>
             ${isOwner ? `
-                <button class="reaction-btn" onclick="editReview('${review.id}')">
+                <button class="reaction-btn" onclick="editReview(${JSON.stringify(review).replace(/"/g, '&quot;')})">
                     ✏️ Edit
                 </button>
                 <button class="reaction-btn" onclick="deleteReview('${review.id}')">
@@ -529,6 +522,8 @@ window.submitReply = async function(reviewId) {
     }
 
     try {
+        console.log('Submitting reply for review:', reviewId);
+        
         const { error } = await supabase
             .from('review_replies')
             .insert([{
@@ -537,10 +532,52 @@ window.submitReply = async function(reviewId) {
                 content: content
             }]);
 
-        if (error) throw error;
+        if (error) {
+            console.error('Reply insert error:', error);
+            throw error;
+        }
+
+        console.log('Reply inserted successfully');
+        
+        // Get user profile for immediate display
+        const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('username, avatar_url')
+            .eq('id', currentUser.id)
+            .single();
+
+        // Immediately add the comment to UI
+        const section = document.getElementById(`reply-section-${reviewId}`);
+        const form = section?.querySelector('.reply-form');
+        if (form) form.remove();
+        
+        if (section) {
+            const replyElement = document.createElement('div');
+            replyElement.className = 'reply';
+            
+            const replyUsername = userProfile?.username || 'Unknown User';
+            const replyAvatarUrl = userProfile?.avatar_url || `https://via.placeholder.com/30/1e3c72/ffffff?text=${replyUsername.charAt(0).toUpperCase()}`;
+            
+            replyElement.innerHTML = `
+                <div class="review-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <img src="${replyAvatarUrl}" alt="${replyUsername}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                        <span class="review-user">${replyUsername}</span>
+                    </div>
+                    <span class="review-time">Just now</span>
+                </div>
+                <div class="review-content">${content}</div>
+            `;
+            
+            section.appendChild(replyElement);
+        }
 
         showSuccessMessage('Reply posted successfully!');
-        loadReviews();
+        
+        // Reload to ensure everything is synced
+        setTimeout(() => {
+            loadReviews();
+        }, 500);
         
     } catch (error) {
         console.error('Error submitting reply:', error);
@@ -587,9 +624,8 @@ window.handleReaction = async function(reviewId) {
     }
 };
 
-window.editReview = function(reviewId) {
-    // For now, just reload the page or implement edit functionality
-    loadReviews();
+window.editReview = function(review) {
+    showReviewModal(review);
 };
 
 window.deleteReview = async function(reviewId) {
