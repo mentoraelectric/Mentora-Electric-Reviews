@@ -1,11 +1,14 @@
+// auth.js
 import { supabase } from './supabase-config.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode');
-    
+
     if (mode === 'signup') {
         showSignup();
+    } else {
+        showLogin();
     }
 
     setupAuthListeners();
@@ -78,17 +81,7 @@ async function handleSignup(e) {
     if (error) {
         alert('Error signing up: ' + error.message);
     } else if (data.user) {
-        // Create user profile
-        await supabase
-            .from('user_profiles')
-            .insert([
-                { 
-                    id: data.user.id, 
-                    username: username 
-                }
-            ]);
-
-        alert('Signup successful! Please check your email for verification.');
+        alert('Signup successful! You can now sign in.');
         showLogin();
     }
 }
