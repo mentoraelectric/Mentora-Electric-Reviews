@@ -1,4 +1,4 @@
-// reviews.js - FIXED DATABASE OPERATIONS
+// reviews.js - FIXED COMMENT POSTING USING ADMIN.JS LOGIC
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -243,7 +243,7 @@ async function handleReviewSubmit(e) {
                     content,
                     image_url: imageUrl
                 }])
-                .select(); // IMPORTANT: Add .select() to get the inserted data back
+                .select();
         }
 
         if (result.error) {
@@ -316,7 +316,6 @@ async function loadReviews() {
     console.log('Loading reviews from database...');
     
     try {
-        // SIMPLIFIED QUERY - Use the working format from your original code
         const { data: reviews, error } = await supabase
             .from('reviews')
             .select(`
@@ -485,7 +484,7 @@ function getTimeAgo(dateString) {
     }
 }
 
-// Global functions
+// Global functions - APPLIED ADMIN.JS LOGIC TO COMMENT POSTING
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -524,29 +523,36 @@ window.submitReply = async function(reviewId) {
     try {
         console.log('Submitting reply for review:', reviewId);
         
-        const { error } = await supabase
+        // APPLIED ADMIN.JS LOGIC: Simple insert with proper error handling
+        const { data, error } = await supabase
             .from('review_replies')
             .insert([{
                 review_id: reviewId,
                 user_id: currentUser.id,
                 content: content
-            }]);
+            }])
+            .select(); // Using .select() like in admin.js to get confirmation
 
         if (error) {
             console.error('Reply insert error:', error);
             throw error;
         }
 
-        console.log('Reply inserted successfully');
+        console.log('Reply inserted successfully:', data);
         
-        // Get user profile for immediate display
-        const { data: userProfile } = await supabase
+        // APPLIED ADMIN.JS LOGIC: Get user profile data properly
+        const { data: userProfile, error: profileError } = await supabase
             .from('user_profiles')
             .select('username, avatar_url')
             .eq('id', currentUser.id)
             .single();
 
-        // Immediately add the comment to UI
+        if (profileError) {
+            console.error('Error fetching user profile:', profileError);
+            throw profileError;
+        }
+
+        // APPLIED ADMIN.JS LOGIC: Update UI immediately after successful database operation
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section?.querySelector('.reply-form');
         if (form) form.remove();
@@ -572,9 +578,10 @@ window.submitReply = async function(reviewId) {
             section.appendChild(replyElement);
         }
 
+        // APPLIED ADMIN.JS LOGIC: Show success notification
         showSuccessMessage('Reply posted successfully!');
         
-        // Reload to ensure everything is synced
+        // APPLIED ADMIN.JS LOGIC: Reload data to ensure consistency
         setTimeout(() => {
             loadReviews();
         }, 500);
