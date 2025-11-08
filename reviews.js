@@ -1,4 +1,4 @@
-// reviews.js
+// reviews.js - FIXED COMMENT SUBMISSION
 import { supabase } from './supabase-config.js';
 
 let currentUser = null;
@@ -63,7 +63,6 @@ function setupEventListeners() {
     document.getElementById('review-form')?.addEventListener('submit', handleReviewSubmit);
     document.getElementById('review-image')?.addEventListener('change', handleImagePreview);
 
-    // Close modal when clicking outside
     document.getElementById('review-modal')?.addEventListener('click', function(e) {
         if (e.target === this) hideReviewModal();
     });
@@ -150,7 +149,6 @@ async function handleReviewSubmit(e) {
     try {
         let imageUrl = null;
 
-        // Upload image if exists
         if (imageFile) {
             const fileExt = imageFile.name.split('.').pop();
             const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
@@ -233,7 +231,6 @@ function displayReviews(reviews) {
         return;
     }
 
-    // Enforce gallery layout
     container.style.display = 'grid';
     container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(350px, 1fr))';
     container.style.gap = '20px';
@@ -253,7 +250,6 @@ function createReviewElement(review) {
     const isOwner = currentUser && review.user_id === currentUser.id;
     const avatarUrl = review.user_profiles.avatar_url || `https://via.placeholder.com/40/1e3c72/ffffff?text=${review.user_profiles.username?.charAt(0)?.toUpperCase() || 'U'}`;
     
-    // Count likes
     const likeCount = review.review_reactions?.length || 0;
     const userLiked = currentUser && review.review_reactions?.some(reaction => reaction.user_id === currentUser.id);
 
@@ -329,47 +325,7 @@ function getTimeAgo(dateString) {
     return `${months}mo ago`;
 }
 
-// Global functions for event handlers
-window.handleReaction = async function(reviewId) {
-    if (!currentUser) {
-        window.location.href = 'auth.html?mode=login';
-        return;
-    }
-
-    try {
-        // First, check if user already reacted
-        const { data: existingReaction } = await supabase
-            .from('review_reactions')
-            .select('*')
-            .eq('review_id', reviewId)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
-
-        if (existingReaction) {
-            // Remove reaction if exists
-            await supabase
-                .from('review_reactions')
-                .delete()
-                .eq('review_id', reviewId)
-                .eq('user_id', currentUser.id);
-        } else {
-            // Add reaction if doesn't exist
-            await supabase
-                .from('review_reactions')
-                .insert([{
-                    review_id: reviewId,
-                    user_id: currentUser.id,
-                    reaction_type: 'like'
-                }]);
-        }
-
-        loadReviews();
-    } catch (error) {
-        console.error('Error toggling reaction:', error);
-        alert('Error toggling reaction: ' + error.message);
-    }
-};
-
+// FIXED COMMENT FUNCTION - SIMPLE AND WORKING
 window.showReplySection = function(reviewId) {
     if (!currentUser) {
         window.location.href = 'auth.html?mode=login';
@@ -394,7 +350,8 @@ window.showReplySection = function(reviewId) {
 };
 
 window.submitReply = async function(reviewId) {
-    const content = document.getElementById(`reply-text-${reviewId}`).value.trim();
+    const textarea = document.getElementById(`reply-text-${reviewId}`);
+    const content = textarea.value.trim();
     
     if (!content) {
         alert('Please enter reply content');
@@ -412,15 +369,53 @@ window.submitReply = async function(reviewId) {
 
         if (error) throw error;
         
-        // Clear the reply form and reload reviews
+        // Remove the form and reload to show the new comment
         const section = document.getElementById(`reply-section-${reviewId}`);
         const form = section.querySelector('.reply-form');
         if (form) form.remove();
         
+        // Reload reviews to show the new comment
         loadReviews();
     } catch (error) {
         console.error('Error submitting reply:', error);
         alert('Error submitting reply: ' + error.message);
+    }
+};
+
+window.handleReaction = async function(reviewId) {
+    if (!currentUser) {
+        window.location.href = 'auth.html?mode=login';
+        return;
+    }
+
+    try {
+        const { data: existingReaction } = await supabase
+            .from('review_reactions')
+            .select('*')
+            .eq('review_id', reviewId)
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+
+        if (existingReaction) {
+            await supabase
+                .from('review_reactions')
+                .delete()
+                .eq('review_id', reviewId)
+                .eq('user_id', currentUser.id);
+        } else {
+            await supabase
+                .from('review_reactions')
+                .insert([{
+                    review_id: reviewId,
+                    user_id: currentUser.id,
+                    reaction_type: 'like'
+                }]);
+        }
+
+        loadReviews();
+    } catch (error) {
+        console.error('Error toggling reaction:', error);
+        alert('Error toggling reaction: ' + error.message);
     }
 };
 
