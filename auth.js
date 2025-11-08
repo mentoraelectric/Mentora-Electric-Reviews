@@ -81,6 +81,7 @@ async function handleSignup(e) {
     if (error) {
         alert('Error signing up: ' + error.message);
     } else if (data.user) {
+        // Profile will be automatically created by the trigger
         alert('Signup successful! You can now sign in.');
         showLogin();
     }
